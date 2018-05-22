@@ -40,9 +40,9 @@ public class SerialPort {
 	public SerialPort(File device, int baudrate, int flags) throws SecurityException, IOException {
 
 		/* Check access permission */
+		/*
 		if (!device.canRead() || !device.canWrite()) {
 			try {
-				/* Missing read/write permission, trying to chmod the file */
 				Process su;
 				su = Runtime.getRuntime().exec("/system/xbin/su");
 				String cmd = "chmod 666 " + device.getAbsolutePath() + "\n"
@@ -57,7 +57,7 @@ public class SerialPort {
 				throw new SecurityException();
 			}
 		}
-
+		*/
 		mFd = open(device.getAbsolutePath(), baudrate, flags);
 		if (mFd == null) {
 			Log.e(TAG, "native open returns null");

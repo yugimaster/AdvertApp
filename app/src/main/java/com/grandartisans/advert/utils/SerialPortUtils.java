@@ -98,14 +98,15 @@ public class SerialPortUtils {
             while (!threadStatus){
                 //Log.d(TAG, "进入线程run");
                 //64   1024
-                byte[] buffer = new byte[64];
+                byte[] buffer = new byte[9];
                 int size; //读取数据的大小
                 try {
                     size = inputStream.read(buffer);
                     if (size > 0){
                         //Log.d(TAG, "run: 接收到了数据：" + changeTool.ByteArrToHex(buffer));
                        // Log.i(TAG, "run: 接收到了数据大小：" + String.valueOf(size));
-                        onDataReceiveListener.onDataReceive(buffer,size);
+                        if(onDataReceiveListener!=null)
+                            onDataReceiveListener.onDataReceive(buffer,size);
                     }
                 } catch (IOException e) {
                     Log.e(TAG, "run: 数据读取异常：" +e.toString());

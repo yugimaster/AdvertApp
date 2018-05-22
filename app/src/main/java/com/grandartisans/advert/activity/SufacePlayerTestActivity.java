@@ -17,9 +17,9 @@ public class SufacePlayerTestActivity extends Activity implements SurfaceHolder.
     private SurfaceView surface;
     private SurfaceHolder surfaceHolder;
 
-    private String adurls[]={"/storage/udisk0/work/videos/58c0d0b04f872.mp4",
-            "/storage/udisk0/work/videos/58c0d1055b43c.mp4",
-            "/storage/udisk0/work/videos/58c0d14d425d5.mp4"};
+    private String adurls[]={"/sdcard/Android/data/com.grandartisans.advert/cache/cfe3f21455ef4319b56758b1390e4a7a.mp4",
+            "/sdcard/Android/data/com.grandartisans.advert/cache/cfe3f21455ef4319b56758b1390e4a7a.mp4"
+            /*"/storage/udisk1/work/videos/58c0d14d425d5.mp4"*/};
     private int playindex = 0;
     @Override
     protected void onCreate(Bundle savedInstanceState) {

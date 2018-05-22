@@ -131,7 +131,7 @@ public class VideoView extends SurfaceView implements MediaPlayerControl {
 		 * "aspect ratio is correct: " + //width+"/"+height+"="+
 		 * //mVideoWidth+"/"+mVideoHeight); } }
 		 */
-		// Log.i("@@@@@@@@@@", "setting size: " + width + 'x' + height);
+		 Log.i("@@@@@@@@@@", "setting size: " + width + 'x' + height);
 		setMeasuredDimension(width, height);
 	}
 

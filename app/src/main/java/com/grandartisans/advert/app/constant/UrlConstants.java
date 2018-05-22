@@ -9,7 +9,7 @@ package com.grandartisans.advert.app.constant;
 public interface UrlConstants {
 
     //String BASE_URL = "https://api.douban.com/";
-    String BASE_URL = "http://111.231.139.168:8881";
+    String BASE_URL = "http://api.dsp.grandartisans.cn/v1/";
     String GET_PLAYING_MOVIE = "v2/movie/in_theaters";
     String GET_COMMING_MOVIE = "v2/movie/coming_soon";
 

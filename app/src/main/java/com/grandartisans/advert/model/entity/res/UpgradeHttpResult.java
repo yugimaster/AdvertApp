@@ -1,11 +1,11 @@
 package com.grandartisans.advert.model.entity.res;
 
-public class AdHttpResult <T> {
+public class UpgradeHttpResult  {
     private boolean success;
     private int status;
     private String msg;
     private String time;
-    private T data;
+    private AppUpgradeData data;
 
     public boolean isSuccess() {
         return success;
@@ -39,11 +39,11 @@ public class AdHttpResult <T> {
         this.time = time;
     }
 
-    public T getData() {
+    public AppUpgradeData getData() {
         return data;
     }
 
-    public void setData(T data) {
+    public void setData(AppUpgradeData data) {
         this.data = data;
     }
 }
