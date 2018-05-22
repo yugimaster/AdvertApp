@@ -99,14 +99,23 @@ public class SerialPortUtils {
                 //Log.d(TAG, "进入线程run");
                 //64   1024
                 byte[] buffer = new byte[9];
-                int size; //读取数据的大小
+                int size=0; //读取数据的大小
                 try {
-                    size = inputStream.read(buffer);
-                    if (size > 0){
-                        //Log.d(TAG, "run: 接收到了数据：" + changeTool.ByteArrToHex(buffer));
-                       // Log.i(TAG, "run: 接收到了数据大小：" + String.valueOf(size));
-                        if(onDataReceiveListener!=null)
-                            onDataReceiveListener.onDataReceive(buffer,size);
+                    size = inputStream.read(buffer,0,1);
+                    if(size==1) {
+                        if(buffer[0]==0x59) {
+                            while (size < 9) {
+                                size += inputStream.read(buffer, size, 9 - size);
+                            }
+                            if (size > 0) {
+                                //Log.d(TAG, "run: 接收到了数据：" + changeTool.ByteArrToHex(buffer));
+                                // Log.i(TAG, "run: 接收到了数据大小：" + String.valueOf(size));
+                                if (onDataReceiveListener != null)
+                                    onDataReceiveListener.onDataReceive(buffer, size);
+                            }
+                        }else{
+                            Log.i(TAG, "run: data head ：" + buffer[0] + "is error");
+                        }
                     }
                 } catch (IOException e) {
                     Log.e(TAG, "run: 数据读取异常：" +e.toString());

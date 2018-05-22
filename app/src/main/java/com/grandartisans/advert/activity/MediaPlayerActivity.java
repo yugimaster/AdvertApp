@@ -90,6 +90,7 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 	private int distance = 0;
 	private int strength = 0;
 	private int threshold_distance = 0;
+	private int lastdistance = 0;
 	public static final String I2C2_SLAVE_NODE = "/sys/class/i2c2/slave";
 	private PrjSettingsManager prjmanager = null;
 	private static Dialog distanceSetDialog = null;
@@ -134,7 +135,15 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 			initPowerOffAlarm(22,00,00);// 设置定时关机提醒
 		}
 	};
-
+    /*
+	Runnable runnable = new Runnable() {
+		@Override
+		public void run() {
+			String message = String.format(getResources().getString(R.string.distmessage), strength, distance);
+			if(messageTV!=null ) messageTV.setText(message);
+		}
+	};
+    */
 	Runnable runableSetPowerOff = new Runnable() {
 		@Override
 		public void run() {
@@ -199,32 +208,46 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 						onVideoPlayCompleted(mp);
 					}
 				});
+		mMediaPlayer.setOnPreparedListener(new MediaPlayer.OnPreparedListener(){
+			@Override public void onPrepared(MediaPlayer mp)
+			{
+				mMediaPlayer.start();
+				Log.i(TAG,"video width = " + mMediaPlayer.getVideoWidth() + "video height = " + mMediaPlayer.getVideoHeight());
+				//mMediaPlayer.setVideoScalingMode(MediaPlayer.VIDEO_SCALING_MODE_SCALE_TO_FIT);
+
+                mMediaPlayer.setVideoScalingMode(MediaPlayer.VIDEO_SCALING_MODE_SCALE_TO_FIT_WITH_CROPPING);
+				setDisplay();
+			}
+		});
 
 	}
 	private void startPlay(String url) {
 		try {
 			mMediaPlayer.reset();
 			mMediaPlayer.setDataSource(url);
-			mMediaPlayer.prepare();
-			mMediaPlayer.start();
+			mMediaPlayer.prepareAsync();
+			//mMediaPlayer.prepare();
+			//mMediaPlayer.start();
 		} catch (IOException e) {
 			// TODO 自动生成的 catch 块
 			e.printStackTrace();
 		}
 	}
 	private void startPlayDefault(){
+		/*
 		AssetFileDescriptor file = getResources().openRawResourceFd(R.raw.defaultvideo);
 		try {
 			mMediaPlayer.reset();
 			mMediaPlayer.setDataSource(file.getFileDescriptor(), file.getStartOffset(),
 					file.getLength());
-			mMediaPlayer.prepare();
-			mMediaPlayer.start();
+			//mMediaPlayer.prepare();
+			mMediaPlayer.prepareAsync();
+			//mMediaPlayer.start();
 			file.close();
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
-
+		*/
 	}
 	private void onVideoPlayCompleted(MediaPlayer mp) {
 		//get next player
@@ -304,10 +327,8 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 			startSysSetting(MediaPlayerActivity.this);
 		}else if(keyCode == KeyEvent.KEYCODE_BACK || keyCode == KeyEvent.KEYCODE_BACKSLASH){
 			return true;
-		}else {
-			return super.onKeyDown(keyCode, event);
 		}
-		return true;
+		return super.onKeyDown(keyCode, event);
 	}
 
 	private void scaleDisplay(int direction){
@@ -321,12 +342,13 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 		int width = windowLayoutParams.width;
 		int height = windowLayoutParams.height;
 		if(width <=0 ) width = display.getWidth();
-		//if(height <=0) height = display.getHeight();
-		if(height <=0) height = (display.getWidth()*4)/10;
+		if(height <=0) height = display.getHeight();
+		//if(height <=0) height = (display.getWidth()*4)/10;
 
 		if(direction == 1) {
 			int min_width = display.getWidth()/2;
-			int min_height = (display.getWidth()/2)*4/10;
+			//int min_height = (display.getWidth()/2)*4/10;
+			int min_height = display.getHeight()/2;
 			windowLayoutParams.x = 0;
 			windowLayoutParams.y = 0;
 			windowLayoutParams.width = (int) (width * 0.95); // 宽度设置为屏幕的0.95
@@ -335,7 +357,8 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 			if(windowLayoutParams.height < min_height) windowLayoutParams.height = min_height;
 		}else if(direction ==0) {
 			int max_width = display.getWidth();
-			int max_height = (display.getWidth()*4)/10;
+			//int max_height = (display.getWidth()*4)/10;
+			int max_height = display.getHeight();
 			windowLayoutParams.x = 0;
 			windowLayoutParams.y = 0;
 			windowLayoutParams.width = (int) (width * 1.05); // 宽度设置为屏幕的0.95
@@ -360,16 +383,26 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
         int height = DevRing.cacheManager().spCache("screenScale").getInt("height",0);
         int x = DevRing.cacheManager().spCache("screenScale").getInt("x",0);
         int y = DevRing.cacheManager().spCache("screenScale").getInt("y",0);
+		Window window = getWindow();
+		WindowManager.LayoutParams windowLayoutParams = window.getAttributes(); // 获取对话框当前的参数值
         if(width!=0 && height !=0) {
-            Log.i(TAG,"set display width = " + width + " height = " + height + "x=" + x + "y=" + y);
-            Window window = getWindow();
-            WindowManager.LayoutParams windowLayoutParams = window.getAttributes(); // 获取对话框当前的参数值
             windowLayoutParams.x = x;
             windowLayoutParams.y = y;
             windowLayoutParams.width = width;
             windowLayoutParams.height = height;
-            window.setAttributes(windowLayoutParams);
+
         }
+        else {
+			Display display = getWindowManager().getDefaultDisplay(); // 为获取屏幕宽、高
+			width = display.getWidth();
+			height = display.getHeight();
+			windowLayoutParams.x = 0;
+			windowLayoutParams.y = 0;
+			windowLayoutParams.width = width;
+			windowLayoutParams.height = height;
+		}
+		Log.i(TAG,"set display width = " + windowLayoutParams.width + " height = " + windowLayoutParams.height + "x=" + windowLayoutParams.x + "y=" + windowLayoutParams.y);
+		window.setAttributes(windowLayoutParams);
         //DevRing.cacheManager().diskCache("advertList").put("playList",adurls.toArray());
     }
 
@@ -432,6 +465,8 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 			distanceSetDialog.getWindow().setType(WindowManager.LayoutParams.TYPE_SYSTEM_ALERT);
 			distanceSetDialog.show();
 			messageTV  = (TextView) distanceSetDialog.findViewById(R.id.distance_dialog);
+			String message = String.format(getResources().getString(R.string.distmessage), strength, distance);
+			if(messageTV!=null ) messageTV.setText(message);
 		}
 	}
 
@@ -445,46 +480,93 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 			public void onDataReceive(byte[] buffer, int size) {
 				//Log.i(TAG, "进入数据监听事件中。。。" + new String(buffer));
 				dealWithData(buffer,size);
-				if(!isPowerOff) {
-                    if(distanceSetDialog!=null && distanceSetDialog.isShowing()) {
-                        handler.post(runnable);
-                    }else {
 
-                        if(threshold_distance>0 && (distance - threshold_distance >20) ){
-                            if(screenStatus ==1) {
-								Log.i(TAG,"threshold_distance= " + threshold_distance + "distance = " + distance + "setscreen off");
-								setScreen(0);
-								if(mMediaPlayer!=null && mMediaPlayer.isPlaying()) {
-									mMediaPlayer.pause();
-								}
+				//handler.post(ReadThread);
+				if(lastdistance !=distance) {
+					handler.post(runnable);
+					lastdistance = distance;
+				}
+			}
 
-                            }
-                        }else {
-                            if(screenStatus ==0) {
-								Log.i(TAG,"threshold_distance= " + threshold_distance + "distance = " + distance + "setscreen on");
-								setScreen(1);
-								if(mMediaPlayer!=null )
-                                	mMediaPlayer.start();
+            Runnable runnable = new Runnable() {
+                @Override
+                public void run() {
+                    if(!isPowerOff) {
+						Log.i(TAG, "threshold_distance= " + threshold_distance + "distance = " + distance );
+                        if (distanceSetDialog != null && distanceSetDialog.isShowing()) {
+                            String message = String.format(getResources().getString(R.string.distmessage), strength, distance);
+                            if(messageTV!=null ) messageTV.setText(message);
+                        } else {
+                            if (threshold_distance > 0 && (distance - threshold_distance > 20)) {
+                                if (screenStatus == 1) {
+                                    Log.i(TAG, "threshold_distance= " + threshold_distance + "distance = " + distance + "setscreen off");
+                                    setScreen(0);
+                                    if (mMediaPlayer != null && mMediaPlayer.isPlaying()) {
+                                        mMediaPlayer.pause();
+                                    }
 
+                                }
+                            } else {
+                                if (screenStatus == 0) {
+                                    Log.i(TAG, "threshold_distance= " + threshold_distance + "distance = " + distance + "setscreen on");
+                                    setScreen(1);
+                                    if (mMediaPlayer != null)
+                                        mMediaPlayer.start();
+
+                                }
                             }
                         }
                     }
                 }
+            };
 
-			}
-			//开线程更新UI
-			Runnable runnable = new Runnable() {
-				@Override
-				public void run() {
-                    //Log.i(TAG,""+ "distance = " + distance + "threshold_distance = " + threshold_distance + "strength = " + strength );
-					if(distanceSetDialog!=null && distanceSetDialog.isShowing()) {
-						String message = String.format(getResources().getString(R.string.distmessage), strength, distance);
-						if(messageTV!=null ) messageTV.setText(message);
-					}
-				}
-			};
 
 		});
+
+		//new ReadThread().start();
+	}
+	private boolean threadStatus = false; //线程状态
+	/**
+	 * 单开一线程，来读数据
+	 */
+	private class ReadThread extends Thread{
+		@Override
+		public void run() {
+			super.run();
+			//判断进程是否在运行，更安全的结束进程
+			while (!threadStatus){
+				if(!isPowerOff) {
+					if (distanceSetDialog != null && distanceSetDialog.isShowing()) {
+						//handler.post(runnable);
+					} else {
+						if (threshold_distance > 0 && (distance - threshold_distance > 20)) {
+							if (screenStatus == 1) {
+								Log.i(TAG, "threshold_distance= " + threshold_distance + "distance = " + distance + "setscreen off");
+								setScreen(0);
+								if (mMediaPlayer != null && mMediaPlayer.isPlaying()) {
+									mMediaPlayer.pause();
+								}
+
+							}
+						} else {
+							if (screenStatus == 0) {
+								Log.i(TAG, "threshold_distance= " + threshold_distance + "distance = " + distance + "setscreen on");
+								setScreen(1);
+								if (mMediaPlayer != null)
+									mMediaPlayer.start();
+
+							}
+						}
+					}
+				}
+			}
+			try {
+				sleep(10);
+			} catch (InterruptedException e) {
+				e.printStackTrace();
+			}
+
+		}
 	}
 
 	private void dealWithData(byte[] buffer, int size)
@@ -541,7 +623,18 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
         Gson gson = new Gson();
         if (jsondata!=null) {
             adurls = gson.fromJson(jsondata, new TypeToken<List<PlayingAdvert>>() {}.getType());
-        }
+        }else{
+        	File path = new File("/system/media/advertList");
+        	if(path.exists()) {
+				File[] files = path.listFiles();// 读取文件夹下文件
+				for (int i = 0; i < files.length; i++) {
+					PlayingAdvert item = new PlayingAdvert();
+					Log.i(TAG,"interal file = " + files[i].getAbsolutePath());
+					item.setPath(files[i].getAbsolutePath());
+					adurls.add(item);
+				}
+			}
+		}
 	}
 
 	private String  getValidUrl() {
