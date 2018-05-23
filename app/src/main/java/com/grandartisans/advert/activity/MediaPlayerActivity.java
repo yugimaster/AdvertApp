@@ -177,6 +177,7 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 
 
 		initView();
+
 		initEventBus();//注册事件接收
 
 		initTFMini();//初始化激光测距模块
@@ -200,7 +201,6 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 		mMediaPlayer = new MediaPlayer();
 		mMediaPlayer.setAudioStreamType(AudioManager.STREAM_MUSIC);
 		mMediaPlayer.setDisplay(surfaceHolder);
-
 		mMediaPlayer
 				.setOnCompletionListener(new MediaPlayer.OnCompletionListener() {
 					@Override
@@ -216,15 +216,16 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 				//mMediaPlayer.setVideoScalingMode(MediaPlayer.VIDEO_SCALING_MODE_SCALE_TO_FIT);
 
                 mMediaPlayer.setVideoScalingMode(MediaPlayer.VIDEO_SCALING_MODE_SCALE_TO_FIT_WITH_CROPPING);
-				setDisplay();
+				//setDisplay();
+
 			}
 		});
 
 	}
 	private void startPlay(String url) {
 		try {
-			mMediaPlayer.reset();
-			mMediaPlayer.setDataSource(url);
+			//mMediaPlayer.setDataSource(url);
+			mMediaPlayer.setDataSource(MediaPlayerActivity.this,Uri.parse(url));
 			mMediaPlayer.prepareAsync();
 			//mMediaPlayer.prepare();
 			//mMediaPlayer.start();
@@ -249,9 +250,21 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 		}
 		*/
 	}
+
+	private void initPlayer(){
+        initFirstPlayer();
+        String url = getValidUrl();
+        if(url!=null && url.length()>0) {
+            startPlay(url);
+        }else {
+            startPlayDefault();
+
+        }
+    }
 	private void onVideoPlayCompleted(MediaPlayer mp) {
 		//get next player
 		if(!isPowerOff) {
+			mMediaPlayer.reset();
 			playindex++;
 			String url = getValidUrl();
 			if (url != null && url.length() > 0) {
@@ -270,14 +283,7 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 	@Override
 	public void surfaceCreated(SurfaceHolder arg0) {
 		//然后初始化播放手段视频的player对象
-		initFirstPlayer();
-		String url = getValidUrl();
-		if(url!=null && url.length()>0) {
-			startPlay(url);
-		}else {
-			startPlayDefault();
-
-		}
+		initPlayer();
 	}
 
 	@Override
@@ -300,9 +306,11 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 	@Override
 	protected void onResume() {
 		super.onResume();
+
 		if(mMediaPlayer!=null ) {
 			mMediaPlayer.start();
 		}
+
 	}
 	@Override
 	public boolean onKeyDown(int keyCode, KeyEvent event) {
@@ -631,6 +639,7 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 					PlayingAdvert item = new PlayingAdvert();
 					Log.i(TAG,"interal file = " + files[i].getAbsolutePath());
 					item.setPath(files[i].getAbsolutePath());
+					//item.setPath("http://update.thewaxseal.cn/videos/defaultvideo.mp4");
 					adurls.add(item);
 				}
 			}

@@ -65,7 +65,7 @@ public class AdvertApp extends Application {
 //        DevRing.configureBus()//配置默认的EventBus
 //                .setIndex(new MyEventBusIndex())//设置用于加速的Index
 //                .setIsUseIndex(true);//设置是否使用index进行加速
-            DevRing.configureBus();//传入RxBus的管理者进行替换
+            //DevRing.configureBus();//传入RxBus的管理者进行替换
 
 
             //数据库模块（可替换，demo演示了如何使用原生数据库替换默认的GreenDao）
