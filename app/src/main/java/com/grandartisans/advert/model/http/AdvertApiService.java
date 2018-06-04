@@ -3,8 +3,10 @@ package com.grandartisans.advert.model.http;
 import com.grandartisans.advert.app.constant.UrlConstants;
 import com.grandartisans.advert.model.entity.post.AdvertParameter;
 import com.grandartisans.advert.model.entity.post.AppUpgradeParameter;
+import com.grandartisans.advert.model.entity.post.HeartBeatParameter;
 import com.grandartisans.advert.model.entity.post.TokenParameter;
 import com.grandartisans.advert.model.entity.res.AdListHttpResult;
+import com.grandartisans.advert.model.entity.res.HeartBeatResult;
 import com.grandartisans.advert.model.entity.res.TokenHttpResult;
 import com.grandartisans.advert.model.entity.res.UpgradeHttpResult;
 
@@ -25,4 +27,8 @@ public interface AdvertApiService {
     @Headers({"Content-Type: application/json;charset=utf-8","Accept: application/json"})
     @POST(UrlConstants.GET_ADVERT_LIST)
     Observable<AdListHttpResult> getAdvertList(@Body AdvertParameter parameter);
+
+    @Headers({"Content-Type: application/json;charset=utf-8","Accept: application/json"})
+    @POST(UrlConstants.SEND_HEARTBEAT)
+    Observable<HeartBeatResult> sendHeardBeat(@Body HeartBeatParameter parameter );
 }

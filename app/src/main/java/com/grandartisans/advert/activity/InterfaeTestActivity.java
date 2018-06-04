@@ -44,6 +44,7 @@ import java.io.File;
 import java.util.List;
 
 public class InterfaeTestActivity extends Activity implements IBaseFragment,IBaseActivity {
+    private final String TAG = "InterfaeTestActivity";
     @Override
     public boolean isUseFragment() {
         return true;
@@ -69,14 +70,20 @@ public class InterfaeTestActivity extends Activity implements IBaseFragment,IBas
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_interfae_test);
-
+        Log.d(TAG,"onCreate");
         //getPlayingMovie(0,20,0);
 
         //downloadFile();
 
-        getToken();
+        //getToken();
 
-        appUpgrade(InterfaeTestActivity.this);
+        //appUpgrade(InterfaeTestActivity.this);
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        Log.d(TAG,"onDestroy");
     }
 
     /**

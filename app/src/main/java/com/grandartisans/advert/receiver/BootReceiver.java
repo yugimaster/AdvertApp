@@ -24,7 +24,7 @@ public class BootReceiver extends BroadcastReceiver {
 			NetworkInfo networkInfo = intent.getParcelableExtra(ConnectivityManager.EXTRA_NETWORK_INFO);
 			ConnectivityManager connectivityManager = (ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
 			NetworkInfo activeNetInfo = connectivityManager.getActiveNetworkInfo();
-			if(activeNetInfo!=null && activeNetInfo.isConnected() /*&& activeNetInfo.getType() != networkInfo.getType()*/){
+			if(activeNetInfo!=null && activeNetInfo.isConnected() ){
 				Intent intentService = new Intent(context,UpgradeService.class);
 				context.startService(intentService);
 			}

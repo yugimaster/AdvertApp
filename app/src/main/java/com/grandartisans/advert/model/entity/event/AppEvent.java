@@ -6,6 +6,7 @@ public class AppEvent<T> {
     public final static int ADVERT_LIST_UPDATE_EVENT = 0;
     public final static int ADVERT_DOWNLOAD_FINISHED_EVENT = 1;
     public final static int POWER_SET_ALARM_EVENT = 2;
+    public final static int ADVERT_LIST_DOWNLOAD_FINISHED_EVENT = 3;
 
 
     public AppEvent(){

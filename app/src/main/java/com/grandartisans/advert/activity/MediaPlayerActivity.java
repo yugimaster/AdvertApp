@@ -52,12 +52,15 @@ import android.widget.VideoView;
 
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
+import com.grandartisans.advert.model.entity.DownloadInfo;
 import com.grandartisans.advert.model.entity.PlayingAdvert;
 import com.grandartisans.advert.model.entity.event.AppEvent;
 import com.grandartisans.advert.model.entity.res.AdvertFile;
+import com.grandartisans.advert.model.entity.res.AdvertPosition;
 import com.grandartisans.advert.model.entity.res.AdvertVo;
 import com.grandartisans.advert.model.entity.res.DateScheduleVo;
 import com.grandartisans.advert.service.UpgradeService;
+import com.grandartisans.advert.utils.AdvertVersion;
 import com.grandartisans.advert.utils.FileUtils;
 import com.grandartisans.advert.utils.SerialPortUtils;
 
@@ -70,6 +73,8 @@ import org.greenrobot.eventbus.Subscribe;
 import org.greenrobot.eventbus.ThreadMode;
 import org.json.JSONArray;
 
+import gartisans.hardware.pico.PicoClient;
+
 public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callback{
 	private final String TAG = "MediaPlayerActivity";
 	private MediaPlayer mMediaPlayer;
@@ -79,6 +84,8 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 	private TextView messageTV ;
 	private int playindex = 0;
 	private List<PlayingAdvert> adurls = new ArrayList<PlayingAdvert>();
+
+	private List<PlayingAdvert> adurls_local = new ArrayList<PlayingAdvert>();
 
 	List<DateScheduleVo> dateScheduleVos;
 	/*
@@ -101,6 +108,35 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 
 	PowerManager mPowerManager;
 	PowerManager.WakeLock mWakeLock;
+
+	private boolean scaleMode = false;
+
+	private final  int threshold_temperature = 52;
+	private  final int temperature_read_times = 30; //连续获取到温度超过指定值次数大于该值，则认为温度过高了
+	private int temperature_read_count=0;
+
+	private PicoClient pClient= null;
+
+	private final int SET_SCREEN_ON_CMD = 100010;
+
+	private Handler mHandler = new Handler()
+	{
+		public void handleMessage(Message paramMessage)
+		{
+			switch (paramMessage.what)
+			{
+				case SET_SCREEN_ON_CMD:
+					setScreen(1);
+					if (mMediaPlayer != null)
+						mMediaPlayer.start();
+					break;
+
+				default:
+					break;
+			}
+			super.handleMessage(paramMessage);
+		}
+	};
 
 	/**
 	 * <功能描述> 保持屏幕常亮
@@ -133,21 +169,14 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 		public void run() {
 			//initPowerOffAlarm(22,00,00);// 设置定时关机提醒
 			initPowerOffAlarm(22,00,00);// 设置定时关机提醒
+
+			initPowerOnAlarm(07,00,00);//设置定时开机提醒
 		}
 	};
-    /*
-	Runnable runnable = new Runnable() {
-		@Override
-		public void run() {
-			String message = String.format(getResources().getString(R.string.distmessage), strength, distance);
-			if(messageTV!=null ) messageTV.setText(message);
-		}
-	};
-    */
+
 	Runnable runableSetPowerOff = new Runnable() {
 		@Override
 		public void run() {
-			initPowerOnAlarm(07,00,00);
             lock.lock();
                 isPowerOff = true;
 
@@ -168,6 +197,8 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 		super.onCreate(savedInstanceState);
 		getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN, WindowManager.LayoutParams.FLAG_FULLSCREEN);
 		setContentView(R.layout.activity_surface_player);
+		Log.i(TAG,"onCreate");
+
 		keepScreenWake();
 		setDisplay();
 
@@ -184,8 +215,31 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 
 		initVideoList();
 
+		/*
 		Intent intentService = new Intent(MediaPlayerActivity.this,UpgradeService.class);
 		startService(intentService);
+		*/
+
+		PicoClient.OnEventListener mPicoOnEventListener = new PicoClient.OnEventListener() {
+		    @Override
+            public void onEvent(PicoClient client, int etype, Object einfo) {
+		        //Log.d(TAG, "PicoClient onEvent" + "etype " + etype + " einfo " + (Float)einfo);
+
+		        if((Float)einfo  > threshold_temperature ) {
+					Log.d(TAG, "read temperature onEvent" + "etype " + etype + " einfo " + (Float)einfo +  "is to high");
+					temperature_read_count ++ ;
+				}else {
+					temperature_read_count = 0;
+				}
+
+				if(temperature_read_count > temperature_read_times) {
+					Log.e(TAG, "temperature is too high , device will power off ");
+				}
+
+		    }
+        };
+		pClient = new PicoClient(mPicoOnEventListener, null);
+
 	}
 	private void initView(){
 		surface = (SurfaceView) findViewById(R.id.surface);
@@ -220,6 +274,15 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 
 			}
 		});
+
+		mMediaPlayer.setOnErrorListener(new MediaPlayer.OnErrorListener(){
+		    @Override public boolean onError(MediaPlayer mp,int what, int extra)
+            {
+                Log.d(TAG, "OnError - Error code: " + what + " Extra code: " + extra);
+                return false;
+            }
+
+        });
 
 	}
 	private void startPlay(String url) {
@@ -277,28 +340,31 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 	@Override
 	public void surfaceChanged(SurfaceHolder arg0, int arg1, int arg2, int arg3) {
 		// TODO 自动生成的方法存根
-
+		Log.i(TAG,"surfaceChanged");
 	}
 
 	@Override
 	public void surfaceCreated(SurfaceHolder arg0) {
 		//然后初始化播放手段视频的player对象
 		initPlayer();
+		Log.i(TAG,"surfaceCreated");
 	}
 
 	@Override
 	public void surfaceDestroyed(SurfaceHolder arg0) {
 		// TODO 自动生成的方法存根
-
+		Log.i(TAG,"surfaceDestroyed");
 	}
 	@Override
 	protected void onStart() {
 		super.onStart();
+		Log.i(TAG,"onStart");
 	}
 
 	@Override
 	protected void onPause() {
 		super.onPause();
+		Log.i(TAG,"onPause");
 		if(mMediaPlayer!=null && mMediaPlayer.isPlaying()) {
 			mMediaPlayer.pause();
 		}
@@ -306,7 +372,7 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 	@Override
 	protected void onResume() {
 		super.onResume();
-
+		Log.i(TAG,"onResume");
 		if(mMediaPlayer!=null ) {
 			mMediaPlayer.start();
 		}
@@ -315,14 +381,22 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 	@Override
 	public boolean onKeyDown(int keyCode, KeyEvent event) {
 		// TODO Auto-generated method stub
+		Log.i(TAG,"onKeyDown keyCode = " + keyCode);
 		if(keyCode == KeyEvent.KEYCODE_DPAD_LEFT) {
 			//screenScale(1);
-
-			scaleDisplay(1);
+			if(isScaleMode()) {
+				scaleDisplay(1);
+			}else{
+				scaleDisplay(5);
+			}
 		}
 		if(keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) {
 			//screenScale(0);
-			scaleDisplay(0);
+			if(isScaleMode()) {
+				scaleDisplay(0);
+			}else{
+				scaleDisplay(6);
+			}
 		}if(keyCode == KeyEvent.KEYCODE_DPAD_DOWN) {
 		    //screenScale(2);
 			scaleDisplay(2);
@@ -330,13 +404,26 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 		    //screenScale(3);
 			scaleDisplay(3);
         }else if(keyCode == KeyEvent.KEYCODE_DPAD_CENTER ) {
-		    showSetDistanceDialog(MediaPlayerActivity.this);
+			if(isScaleMode()){
+				setScaleMode(false);
+			}else {
+				showSetDistanceDialog(MediaPlayerActivity.this);
+			}
         }else if(keyCode == KeyEvent.KEYCODE_MENU) {
 			startSysSetting(MediaPlayerActivity.this);
 		}else if(keyCode == KeyEvent.KEYCODE_BACK || keyCode == KeyEvent.KEYCODE_BACKSLASH){
 			return true;
+		}else if(keyCode == 138) { //对焦键按下，对屏幕缩放
+			setScaleMode(true);
 		}
 		return super.onKeyDown(keyCode, event);
+	}
+
+	private void setScaleMode(boolean enable){
+		scaleMode = enable;
+	}
+	private boolean isScaleMode(){
+		return scaleMode;
 	}
 
 	private void scaleDisplay(int direction){
@@ -353,32 +440,36 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 		if(height <=0) height = display.getHeight();
 		//if(height <=0) height = (display.getWidth()*4)/10;
 
-		if(direction == 1) {
+		if(direction == 1) { /*缩小显示比例*/
 			int min_width = display.getWidth()/2;
 			//int min_height = (display.getWidth()/2)*4/10;
 			int min_height = display.getHeight()/2;
 			windowLayoutParams.x = 0;
 			windowLayoutParams.y = 0;
-			windowLayoutParams.width = (int) (width * 0.95); // 宽度设置为屏幕的0.95
-			windowLayoutParams.height = (int) (height * 0.95); // 高度设置为屏幕的0.6
+			windowLayoutParams.width = (int) (width * 0.99); // 宽度设置为屏幕的0.95
+			windowLayoutParams.height = (int) (height * 0.99); // 高度设置为屏幕的0.6
 			if(windowLayoutParams.width < min_width) windowLayoutParams.width = min_width;
 			if(windowLayoutParams.height < min_height) windowLayoutParams.height = min_height;
-		}else if(direction ==0) {
+		}else if(direction ==0) {/*放大显示比例*/
 			int max_width = display.getWidth();
 			//int max_height = (display.getWidth()*4)/10;
 			int max_height = display.getHeight();
 			windowLayoutParams.x = 0;
 			windowLayoutParams.y = 0;
-			windowLayoutParams.width = (int) (width * 1.05); // 宽度设置为屏幕的0.95
-			windowLayoutParams.height = (int) (height * 1.05); // 高度设置为屏幕的0.6
+			windowLayoutParams.width = (int) (width * 1.01); // 宽度设置为屏幕的0.95
+			windowLayoutParams.height = (int) (height * 1.01); // 高度设置为屏幕的0.6
 			if(windowLayoutParams.width > max_width) windowLayoutParams.width = max_width;
 			if(windowLayoutParams.height > max_height) windowLayoutParams.height = max_height;
-		}else if(direction ==2) {
-			windowLayoutParams.y = windowLayoutParams.y+5;
-		}else if(direction == 3) {
-			windowLayoutParams.y = windowLayoutParams.y-5;
+		}else if(direction ==2) { /*垂直向上移动*/
+			windowLayoutParams.y = windowLayoutParams.y+2;
+		}else if(direction == 3) {/*垂直向下移动*/
+			windowLayoutParams.y = windowLayoutParams.y-2;
+		}else if(direction == 5) {/*水平向左移动*/
+			windowLayoutParams.x = windowLayoutParams.x-2;
+		}else if(direction == 6) {/*水平向右移动*/
+			windowLayoutParams.x = windowLayoutParams.x+2;
 		}
-		Log.i(TAG,"widow width = " + windowLayoutParams.width + "widow height = " + windowLayoutParams.height);
+		Log.i(TAG,"widow width = " + windowLayoutParams.width + "widow height = " + windowLayoutParams.height + "x :" + windowLayoutParams.x + "y :" + windowLayoutParams.y);
 		window.setAttributes(windowLayoutParams);
         DevRing.cacheManager().spCache("screenScale").put("width",windowLayoutParams.width);
         DevRing.cacheManager().spCache("screenScale").put("height",windowLayoutParams.height);
@@ -423,8 +514,12 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 	@Override
 	protected void onDestroy() {
 		super.onDestroy();
+		Log.i(TAG,"onDestroy");
 		releaseWakeLock();
-		mMediaPlayer.stop();
+		if(mMediaPlayer!=null && mMediaPlayer.isPlaying()) {
+			mMediaPlayer.stop();
+			mMediaPlayer.release();
+		}
 		EventBus.getDefault().unregister(this);
 		if(serialPortUtils!=null) serialPortUtils.closeSerialPort();
 	}
@@ -500,12 +595,12 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
                 @Override
                 public void run() {
                     if(!isPowerOff) {
-						Log.i(TAG, "threshold_distance= " + threshold_distance + "distance = " + distance );
+						//Log.i(TAG, "threshold_distance= " + threshold_distance + "distance = " + distance );
                         if (distanceSetDialog != null && distanceSetDialog.isShowing()) {
                             String message = String.format(getResources().getString(R.string.distmessage), strength, distance);
                             if(messageTV!=null ) messageTV.setText(message);
                         } else {
-                            if (threshold_distance > 0 && (distance - threshold_distance > 20)) {
+                            if (threshold_distance > 0 && (distance - threshold_distance > 10)) {
                                 if (screenStatus == 1) {
                                     Log.i(TAG, "threshold_distance= " + threshold_distance + "distance = " + distance + "setscreen off");
                                     setScreen(0);
@@ -517,10 +612,12 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
                             } else {
                                 if (screenStatus == 0) {
                                     Log.i(TAG, "threshold_distance= " + threshold_distance + "distance = " + distance + "setscreen on");
+									mHandler.sendEmptyMessageDelayed(SET_SCREEN_ON_CMD,1000);
+									/*
                                     setScreen(1);
                                     if (mMediaPlayer != null)
                                         mMediaPlayer.start();
-
+									*/
                                 }
                             }
                         }
@@ -587,8 +684,12 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 			Log.i(TAG,"receiv data error ,head data0 = "+ buffer[0] +"data1 = "+buffer[1]);
 			return ;
 		}
-		distance = buffer[2]&0xff + (buffer[3]&0xff)*256;
-		strength = buffer[4]&0xff + (buffer[5]&0xff)*256;
+		int low = buffer[2]&0xff;
+		int high = buffer[3]&0xff;
+		distance = low + high*256;
+		low = buffer[4]&0xff;
+		high = buffer[5]&0xff;
+		strength = low + high*256;
 		/*
 		Log.i(TAG,"strength = " + strength + "dist is " + distance);
 		for(int i=0;i<size;i++) {
@@ -640,7 +741,7 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 					Log.i(TAG,"interal file = " + files[i].getAbsolutePath());
 					item.setPath(files[i].getAbsolutePath());
 					//item.setPath("http://update.thewaxseal.cn/videos/defaultvideo.mp4");
-					adurls.add(item);
+					adurls_local.add(item);
 				}
 			}
 		}
@@ -651,12 +752,15 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 		if(adurls.size()>0) {
 			int index = playindex % adurls.size();
 			url = adurls.get(index).getPath();
+		}else if(adurls_local.size()>0) {
+			int index = playindex % adurls_local.size();
+			url = adurls_local.get(index).getPath();
 		}
 		return url;
 	}
 
 	private void updateVideoList(String path) {
-		playindex=0;
+		//playindex=0;
 		if(dateScheduleVos!=null && dateScheduleVos.size()>0) {
             List<AdvertVo> packageAdverts = dateScheduleVos.get(0).getTimeScheduleVos().get(0).getPackageAdverts();
             int size = packageAdverts.size();
@@ -679,6 +783,10 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
             Log.i(TAG, "save advertlist = " + str);
             DevRing.cacheManager().diskCache("advertList").put("playList", str);
         }
+	}
+
+	private void saveAdvertVersion(AdvertPosition advertPosition){
+		AdvertVersion.setAdVersion(advertPosition.getId().intValue(),advertPosition.getVersion());
 	}
 
 	private void setScreen(int enable){
@@ -715,7 +823,8 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 		//设置一个PendingIntent对象，发送广播
 		AlarmManager am=(AlarmManager)getSystemService(ALARM_SERVICE);
 		//获取AlarmManager对象
-		am.set(AlarmManager.RTC_WAKEUP, cal.getTimeInMillis(), pi);
+		//am.set(AlarmManager.RTC_WAKEUP, cal.getTimeInMillis(), pi);
+		am.setExact(AlarmManager.RTC_WAKEUP, cal.getTimeInMillis(), pi);
 	}
 
 
@@ -739,7 +848,8 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 		//设置一个PendingIntent对象，发送广播
 		AlarmManager am=(AlarmManager)getSystemService(ALARM_SERVICE);
 		//获取AlarmManager对象
-		am.set(AlarmManager.RTC_WAKEUP, cal.getTimeInMillis(), pi);
+		//am.set(AlarmManager.RTC_WAKEUP, cal.getTimeInMillis(), pi);
+        am.setExact(AlarmManager.RTC_WAKEUP, cal.getTimeInMillis(), pi);
 	}
 
 	private void reboot (){
@@ -765,6 +875,9 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 				adurls.clear();
 				playindex = 0;
 				Log.i(TAG,"received event data size =  " + dateScheduleVos.size());
+				break;
+			case AppEvent.ADVERT_LIST_DOWNLOAD_FINISHED_EVENT:
+				saveAdvertVersion((AdvertPosition) event.getData());
 				break;
 			case AppEvent.POWER_SET_ALARM_EVENT:
 				if ("POWER_OFF_ALARM".equals(event.getData())) {

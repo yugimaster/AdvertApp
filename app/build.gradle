@@ -6,8 +6,8 @@ android {
         applicationId "com.grandartisans.advert"
         minSdkVersion 21
         targetSdkVersion 27
-        versionCode 2
-        versionName "1.0.1"
+        versionCode 3
+        versionName "1.0.2"
     }
     sourceSets {
         main {
@@ -55,4 +55,5 @@ dependencies {
     api 'org.greenrobot:eventbus:3.0.0'
     //用于替换fresco的网络加载为okhttp
     implementation files('libs/prjManager.jar')
+    provided files('libs/pico.jar')
 }

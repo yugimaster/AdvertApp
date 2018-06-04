@@ -20,4 +20,5 @@ public interface UrlConstants {
     String GET_APP_UPGRADE = "api/version/app/check";
     String GET_SYSTEM_UPGRADE = "api/version/system/check";
     String GET_ADVERT_LIST = "api/schedule/times";
+    String  SEND_HEARTBEAT = "api/heartbeat/new";
 }
