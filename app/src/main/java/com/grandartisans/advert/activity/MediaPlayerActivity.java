@@ -270,6 +270,7 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 				//mMediaPlayer.setVideoScalingMode(MediaPlayer.VIDEO_SCALING_MODE_SCALE_TO_FIT);
 
                 mMediaPlayer.setVideoScalingMode(MediaPlayer.VIDEO_SCALING_MODE_SCALE_TO_FIT_WITH_CROPPING);
+                //mMediaPlayer.setVideoScalingMode(MediaPlayer.VIDEO_SCALING_MODE_SCALE_TO_FIT);
 				//setDisplay();
 
 			}
@@ -442,8 +443,8 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 
 		if(direction == 1) { /*缩小显示比例*/
 			int min_width = display.getWidth()/2;
-			//int min_height = (display.getWidth()/2)*4/10;
-			int min_height = display.getHeight()/2;
+			int min_height = (display.getWidth()*4/10)/2;
+			//int min_height = display.getHeight()/2;
 			windowLayoutParams.x = 0;
 			windowLayoutParams.y = 0;
 			windowLayoutParams.width = (int) (width * 0.99); // 宽度设置为屏幕的0.95
@@ -452,8 +453,8 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 			if(windowLayoutParams.height < min_height) windowLayoutParams.height = min_height;
 		}else if(direction ==0) {/*放大显示比例*/
 			int max_width = display.getWidth();
-			//int max_height = (display.getWidth()*4)/10;
-			int max_height = display.getHeight();
+			int max_height = (display.getWidth()*4)/10;
+			//int max_height = display.getHeight();
 			windowLayoutParams.x = 0;
 			windowLayoutParams.y = 0;
 			windowLayoutParams.width = (int) (width * 1.01); // 宽度设置为屏幕的0.95
@@ -494,7 +495,7 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
         else {
 			Display display = getWindowManager().getDefaultDisplay(); // 为获取屏幕宽、高
 			width = display.getWidth();
-			height = display.getHeight();
+			height = (display.getWidth()*4)/10;
 			windowLayoutParams.x = 0;
 			windowLayoutParams.y = 0;
 			windowLayoutParams.width = width;
