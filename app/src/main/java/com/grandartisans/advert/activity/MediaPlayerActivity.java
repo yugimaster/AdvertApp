@@ -273,13 +273,15 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 					}
 				});
 		mMediaPlayer.setOnPreparedListener(new MediaPlayer.OnPreparedListener(){
-			@Override public void onPrepared(MediaPlayer mp)
-			{
+			@Override public void onPrepared(MediaPlayer mp) {
 
-				Log.i(TAG,"video width = " + mMediaPlayer.getVideoWidth() + "video height = " + mMediaPlayer.getVideoHeight());
-				//mMediaPlayer.setVideoScalingMode(MediaPlayer.VIDEO_SCALING_MODE_SCALE_TO_FIT_WITH_CROPPING);
-				mMediaPlayer.setVideoScalingMode(MediaPlayer.VIDEO_SCALING_MODE_SCALE_TO_FIT);
-				mMediaPlayer.start();
+                Log.i(TAG, "video width = " + mMediaPlayer.getVideoWidth() + "video height = " + mMediaPlayer.getVideoHeight());
+                //mMediaPlayer.setVideoScalingMode(MediaPlayer.VIDEO_SCALING_MODE_SCALE_TO_FIT_WITH_CROPPING);
+                mMediaPlayer.setVideoScalingMode(MediaPlayer.VIDEO_SCALING_MODE_SCALE_TO_FIT);
+                mMediaPlayer.start();
+                if (getScreenStatus() == 0){
+                    mMediaPlayer.pause();
+			    }
 				if(player_first_time == true) {
 					player_first_time = false;
 					mMediaPlayer.seekTo(mMediaPlayer.getDuration());
@@ -841,6 +843,10 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 	private void saveAdvertVersion(AdvertPosition advertPosition){
 		AdvertVersion.setAdVersion(advertPosition.getId().intValue(),advertPosition.getVersion());
 	}
+
+	private int getScreenStatus(){
+	    return screenStatus;
+    }
 
 	private void setScreen(int enable){
         screenStatus = enable;
