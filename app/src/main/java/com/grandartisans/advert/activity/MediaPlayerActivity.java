@@ -39,12 +39,12 @@ import android.view.Display;
 import android.view.Gravity;
 import android.view.KeyEvent;
 import android.view.SurfaceHolder;
-import android.view.SurfaceView;
 import android.view.View;
 import android.view.ViewGroup.LayoutParams;
 import android.view.Window;
 import android.view.WindowManager;
 import android.widget.ImageView;
+import android.widget.LinearLayout;
 import android.widget.MediaController;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -65,6 +65,7 @@ import com.grandartisans.advert.utils.FileUtils;
 import com.grandartisans.advert.utils.SerialPortUtils;
 
 import com.grandartisans.advert.R;
+import com.grandartisans.advert.view.MySurfaceView;
 import com.ljy.devring.DevRing;
 import com.prj.utils.PrjSettingsManager;
 
@@ -78,7 +79,7 @@ import gartisans.hardware.pico.PicoClient;
 public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callback{
 	private final String TAG = "MediaPlayerActivity";
 	private MediaPlayer mMediaPlayer;
-	private SurfaceView surface;
+	private MySurfaceView surface;
 	private SurfaceHolder surfaceHolder;;
 
 	private TextView messageTV ;
@@ -117,7 +118,10 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 
 	private PicoClient pClient= null;
 
+	private boolean  player_first_time = true;
+
 	private final int SET_SCREEN_ON_CMD = 100010;
+	private final int START_PLAYER_CMD = 100011;
 
 	private Handler mHandler = new Handler()
 	{
@@ -130,7 +134,9 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 					if (mMediaPlayer != null)
 						mMediaPlayer.start();
 					break;
-
+				case START_PLAYER_CMD:
+					initPlayer();
+					break;
 				default:
 					break;
 			}
@@ -200,7 +206,8 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 		Log.i(TAG,"onCreate");
 
 		keepScreenWake();
-		setDisplay();
+
+
 
 		handler = new Handler();
 		handler.postDelayed(runnableAlarm,1000*60*5);
@@ -214,6 +221,9 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 		initTFMini();//初始化激光测距模块
 
 		initVideoList();
+
+		setDisplay();
+
 
 		/*
 		Intent intentService = new Intent(MediaPlayerActivity.this,UpgradeService.class);
@@ -242,7 +252,7 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 
 	}
 	private void initView(){
-		surface = (SurfaceView) findViewById(R.id.surface);
+		surface = (MySurfaceView) findViewById(R.id.surface);
 
 		surfaceHolder = surface.getHolder();// SurfaceHolder是SurfaceView的控制接口
 		surfaceHolder.addCallback(this);
@@ -265,13 +275,15 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 		mMediaPlayer.setOnPreparedListener(new MediaPlayer.OnPreparedListener(){
 			@Override public void onPrepared(MediaPlayer mp)
 			{
-				mMediaPlayer.start();
-				Log.i(TAG,"video width = " + mMediaPlayer.getVideoWidth() + "video height = " + mMediaPlayer.getVideoHeight());
-				//mMediaPlayer.setVideoScalingMode(MediaPlayer.VIDEO_SCALING_MODE_SCALE_TO_FIT);
 
-                mMediaPlayer.setVideoScalingMode(MediaPlayer.VIDEO_SCALING_MODE_SCALE_TO_FIT_WITH_CROPPING);
-                //mMediaPlayer.setVideoScalingMode(MediaPlayer.VIDEO_SCALING_MODE_SCALE_TO_FIT);
-				//setDisplay();
+				Log.i(TAG,"video width = " + mMediaPlayer.getVideoWidth() + "video height = " + mMediaPlayer.getVideoHeight());
+				//mMediaPlayer.setVideoScalingMode(MediaPlayer.VIDEO_SCALING_MODE_SCALE_TO_FIT_WITH_CROPPING);
+				mMediaPlayer.setVideoScalingMode(MediaPlayer.VIDEO_SCALING_MODE_SCALE_TO_FIT);
+				mMediaPlayer.start();
+				if(player_first_time == true) {
+					player_first_time = false;
+					mMediaPlayer.seekTo(mMediaPlayer.getDuration());
+				}
 
 			}
 		});
@@ -285,7 +297,14 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 
         });
 
+		mMediaPlayer.setOnVideoSizeChangedListener(new MediaPlayer.OnVideoSizeChangedListener(){
+			@Override public void onVideoSizeChanged(MediaPlayer mp,int width,int height) {
+				Log.d(TAG, "setOnVideoSizeChangedListener  width: " + width + "height: " + height);
+			}
+		});
+
 	}
+
 	private void startPlay(String url) {
 		try {
 			//mMediaPlayer.setDataSource(url);
@@ -318,6 +337,7 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 	private void initPlayer(){
         initFirstPlayer();
         String url = getValidUrl();
+		mMediaPlayer.reset();
         if(url!=null && url.length()>0) {
             startPlay(url);
         }else {
@@ -339,15 +359,17 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 		}
 	}
 	@Override
-	public void surfaceChanged(SurfaceHolder arg0, int arg1, int arg2, int arg3) {
+	public void surfaceChanged(SurfaceHolder holder,  int format, int width,int height) {
 		// TODO 自动生成的方法存根
-		Log.i(TAG,"surfaceChanged");
+		Log.i(TAG,"surfaceChanged111 format = " + format + "width = "  + width  + "height = " + height);
+		//holder.setFixedSize(width, height);
 	}
 
 	@Override
 	public void surfaceCreated(SurfaceHolder arg0) {
 		//然后初始化播放手段视频的player对象
-		initPlayer();
+		//initPlayer();
+		mHandler.sendEmptyMessageDelayed(START_PLAYER_CMD,2*1000);
 		Log.i(TAG,"surfaceCreated");
 	}
 
@@ -430,7 +452,10 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 	private void scaleDisplay(int direction){
 		Display display = getWindowManager().getDefaultDisplay(); // 为获取屏幕宽、高
 		Window window = getWindow();
+
+
 		Log.i(TAG,"display width = " + display.getWidth() + "display height = " + display.getHeight());
+
 		WindowManager.LayoutParams windowLayoutParams = window.getAttributes(); // 获取对话框当前的参数值
 		//windowLayoutParams.width = (int) (display.getWidth() * 0.7); // 宽度设置为屏幕的0.95
 		//windowLayoutParams.height = (int) (display.getHeight() * 0.1); // 高度设置为屏幕的0.6
@@ -443,22 +468,29 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 
 		if(direction == 1) { /*缩小显示比例*/
 			int min_width = display.getWidth()/2;
-			int min_height = (display.getWidth()*4/10)/2;
+			int min_height = (display.getWidth()*4/11)/2;
+
+			//int min_width = 1800/2;
+			//int min_height = 720/2;
+
 			//int min_height = display.getHeight()/2;
 			windowLayoutParams.x = 0;
 			windowLayoutParams.y = 0;
 			windowLayoutParams.width = (int) (width * 0.99); // 宽度设置为屏幕的0.95
-			windowLayoutParams.height = (int) (height * 0.99); // 高度设置为屏幕的0.6
+			//windowLayoutParams.height = (int) (height * 0.99); // 高度设置为屏幕的0.6
+			windowLayoutParams.height = (int) ((windowLayoutParams.width * 4)/11);
 			if(windowLayoutParams.width < min_width) windowLayoutParams.width = min_width;
 			if(windowLayoutParams.height < min_height) windowLayoutParams.height = min_height;
 		}else if(direction ==0) {/*放大显示比例*/
 			int max_width = display.getWidth();
-			int max_height = (display.getWidth()*4)/10;
+			int max_height = (display.getWidth()*4)/11;
+
 			//int max_height = display.getHeight();
 			windowLayoutParams.x = 0;
 			windowLayoutParams.y = 0;
 			windowLayoutParams.width = (int) (width * 1.01); // 宽度设置为屏幕的0.95
-			windowLayoutParams.height = (int) (height * 1.01); // 高度设置为屏幕的0.6
+			//windowLayoutParams.height = (int) (height * 1.01); // 高度设置为屏幕的0.6
+			windowLayoutParams.height = (int) ((windowLayoutParams.width * 4)/11); // 高度设置为屏幕的0.6
 			if(windowLayoutParams.width > max_width) windowLayoutParams.width = max_width;
 			if(windowLayoutParams.height > max_height) windowLayoutParams.height = max_height;
 		}else if(direction ==2) { /*垂直向上移动*/
@@ -472,6 +504,14 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 		}
 		Log.i(TAG,"widow width = " + windowLayoutParams.width + "widow height = " + windowLayoutParams.height + "x :" + windowLayoutParams.x + "y :" + windowLayoutParams.y);
 		window.setAttributes(windowLayoutParams);
+
+		//surface.setLayoutParams(new LinearLayout.LayoutParams(windowLayoutParams.width, windowLayoutParams.height));
+
+		//surface.getHolder().setFixedSize((int)windowLayoutParams.width,windowLayoutParams.height);
+		surface.setMeasure(windowLayoutParams.width,windowLayoutParams.height);
+		surface.requestLayout();
+
+
         DevRing.cacheManager().spCache("screenScale").put("width",windowLayoutParams.width);
         DevRing.cacheManager().spCache("screenScale").put("height",windowLayoutParams.height);
         DevRing.cacheManager().spCache("screenScale").put("x",windowLayoutParams.x);
@@ -485,6 +525,7 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
         int y = DevRing.cacheManager().spCache("screenScale").getInt("y",0);
 		Window window = getWindow();
 		WindowManager.LayoutParams windowLayoutParams = window.getAttributes(); // 获取对话框当前的参数值
+
         if(width!=0 && height !=0) {
             windowLayoutParams.x = x;
             windowLayoutParams.y = y;
@@ -495,7 +536,8 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
         else {
 			Display display = getWindowManager().getDefaultDisplay(); // 为获取屏幕宽、高
 			width = display.getWidth();
-			height = (display.getWidth()*4)/10;
+			height = (display.getWidth()*4)/11;
+			//height = display.getHeight();
 			windowLayoutParams.x = 0;
 			windowLayoutParams.y = 0;
 			windowLayoutParams.width = width;
@@ -503,6 +545,15 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 		}
 		Log.i(TAG,"set display width = " + windowLayoutParams.width + " height = " + windowLayoutParams.height + "x=" + windowLayoutParams.x + "y=" + windowLayoutParams.y);
 		window.setAttributes(windowLayoutParams);
+
+
+
+		//surface.setLayoutParams(new LinearLayout.LayoutParams(windowLayoutParams.width, windowLayoutParams.height));
+
+		//surface.getHolder().setFixedSize((int)windowLayoutParams.width,windowLayoutParams.height);
+		surface.setMeasure(windowLayoutParams.width,windowLayoutParams.height);
+		surface.requestLayout();
+
         //DevRing.cacheManager().diskCache("advertList").put("playList",adurls.toArray());
     }
 
@@ -603,6 +654,7 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
                         } else {
                             if (threshold_distance > 0 && (distance - threshold_distance > 10)) {
                                 if (screenStatus == 1) {
+									mHandler.removeMessages(SET_SCREEN_ON_CMD);
                                     Log.i(TAG, "threshold_distance= " + threshold_distance + "distance = " + distance + "setscreen off");
                                     setScreen(0);
                                     if (mMediaPlayer != null && mMediaPlayer.isPlaying()) {
