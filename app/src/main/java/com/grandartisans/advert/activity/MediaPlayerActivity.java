@@ -24,6 +24,7 @@ import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.res.AssetFileDescriptor;
+import android.graphics.Color;
 import android.media.AudioManager;
 import android.media.MediaPlayer;
 import android.media.MediaPlayer.OnPreparedListener;
@@ -439,7 +440,15 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 		}else if(keyCode == KeyEvent.KEYCODE_BACK || keyCode == KeyEvent.KEYCODE_BACKSLASH){
 			return true;
 		}else if(keyCode == 138) { //对焦键按下，对屏幕缩放
-			setScaleMode(true);
+			if(isScaleMode() == true) {
+				setScaleMode(false);
+				surface.setBackground(null);
+				mMediaPlayer.start();
+			}else {
+				setScaleMode(true);
+				mMediaPlayer.pause();
+				surface.setBackgroundColor(Color.BLUE);
+			}
 		}
 		return super.onKeyDown(keyCode, event);
 	}
