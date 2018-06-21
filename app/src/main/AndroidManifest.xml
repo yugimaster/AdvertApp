@@ -89,10 +89,9 @@
             android:enabled="true"
             android:exported="true" />
         <service
-            android:name=".service.UpgradeService"
+            android:name=".service.RemoteService"
             android:enabled="true"
             android:exported="true" />
-
     </application>
 
 </manifest>
