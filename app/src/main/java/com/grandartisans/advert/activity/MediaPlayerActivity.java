@@ -393,17 +393,18 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 		super.onPause();
 		Log.i(TAG,"onPause");
 		if(mMediaPlayer!=null && mMediaPlayer.isPlaying()) {
-			mMediaPlayer.pause();
+			mMediaPlayer.stop();
 		}
 	}
 	@Override
 	protected void onResume() {
 		super.onResume();
 		Log.i(TAG,"onResume");
+		/*
 		if(mMediaPlayer!=null ) {
 			mMediaPlayer.start();
 		}
-
+		*/
 	}
 	@Override
 	public boolean onKeyDown(int keyCode, KeyEvent event) {
