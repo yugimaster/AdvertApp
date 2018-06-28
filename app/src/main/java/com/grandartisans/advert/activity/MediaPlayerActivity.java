@@ -223,7 +223,7 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 
 		initVideoList();
 
-		setDisplay();
+		//setDisplay();
 
 
 		/*
@@ -283,11 +283,12 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
                 if (getScreenStatus() == 0){
                     mMediaPlayer.pause();
 			    }
+			    /*
 				if(player_first_time == true) {
 					player_first_time = false;
 					mMediaPlayer.seekTo(mMediaPlayer.getDuration());
 				}
-
+				*/
 			}
 		});
 
@@ -410,25 +411,29 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 		Log.i(TAG,"onKeyDown keyCode = " + keyCode);
 		if(keyCode == KeyEvent.KEYCODE_DPAD_LEFT) {
 			//screenScale(1);
+			/*
 			if(isScaleMode()) {
 				scaleDisplay(1);
 			}else{
 				scaleDisplay(5);
 			}
+			*/
 		}
 		if(keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) {
 			//screenScale(0);
+			/*
 			if(isScaleMode()) {
 				scaleDisplay(0);
 			}else{
 				scaleDisplay(6);
 			}
+			*/
 		}if(keyCode == KeyEvent.KEYCODE_DPAD_DOWN) {
 		    //screenScale(2);
-			scaleDisplay(2);
+			//scaleDisplay(2);
         }else if(keyCode == KeyEvent.KEYCODE_DPAD_UP){
 		    //screenScale(3);
-			scaleDisplay(3);
+			//scaleDisplay(3);
         }else if(keyCode == KeyEvent.KEYCODE_DPAD_CENTER ) {
 			if(isScaleMode()){
 				setScaleMode(false);
@@ -440,6 +445,7 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 		}else if(keyCode == KeyEvent.KEYCODE_BACK || keyCode == KeyEvent.KEYCODE_BACKSLASH){
 			return true;
 		}else if(keyCode == 138) { //对焦键按下，对屏幕缩放
+			/*
 			if(isScaleMode() == true) {
 				setScaleMode(false);
 				surface.setBackground(null);
@@ -449,6 +455,7 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 				mMediaPlayer.pause();
 				surface.setBackgroundColor(Color.BLUE);
 			}
+			*/
 		}
 		return super.onKeyDown(keyCode, event);
 	}
@@ -589,7 +596,9 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 
 	private void initTFMini() {
 		initserialPort();
-		threshold_distance = DevRing.cacheManager().spCache("TFMini").getInt("threshold_distance",0);
+		threshold_distance = Integer.valueOf(prjmanager.getDistance());
+
+		//threshold_distance = DevRing.cacheManager().spCache("TFMini").getInt("threshold_distance",0);
 		/*
 		if(threshold_distance == 0 ) {
 			showSetDistanceDialog(MediaPlayerActivity.this);
