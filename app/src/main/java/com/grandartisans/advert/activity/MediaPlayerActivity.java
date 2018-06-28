@@ -673,7 +673,7 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
                             if(messageTV!=null ) messageTV.setText(message);
                         } else {
                             if (threshold_distance > 0 && (distance - threshold_distance > 10)) {
-                                if (screenStatus == 1) {
+                                if (screenStatus == 1 || screenStatus ==2) {
 									mHandler.removeMessages(SET_SCREEN_ON_CMD);
                                     Log.i(TAG, "threshold_distance= " + threshold_distance + "distance = " + distance + "setscreen off");
                                     setScreen(0);
@@ -684,6 +684,7 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
                                 }
                             } else {
                                 if (screenStatus == 0) {
+									screenStatus = 2;
                                     Log.i(TAG, "threshold_distance= " + threshold_distance + "distance = " + distance + "setscreen on");
 									mHandler.sendEmptyMessageDelayed(SET_SCREEN_ON_CMD,1000);
 									/*
@@ -701,51 +702,8 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 
 		});
 
-		//new ReadThread().start();
 	}
-	private boolean threadStatus = false; //线程状态
-	/**
-	 * 单开一线程，来读数据
-	 */
-	private class ReadThread extends Thread{
-		@Override
-		public void run() {
-			super.run();
-			//判断进程是否在运行，更安全的结束进程
-			while (!threadStatus){
-				if(!isPowerOff) {
-					if (distanceSetDialog != null && distanceSetDialog.isShowing()) {
-						//handler.post(runnable);
-					} else {
-						if (threshold_distance > 0 && (distance - threshold_distance > 20)) {
-							if (screenStatus == 1) {
-								Log.i(TAG, "threshold_distance= " + threshold_distance + "distance = " + distance + "setscreen off");
-								setScreen(0);
-								if (mMediaPlayer != null && mMediaPlayer.isPlaying()) {
-									mMediaPlayer.pause();
-								}
 
-							}
-						} else {
-							if (screenStatus == 0) {
-								Log.i(TAG, "threshold_distance= " + threshold_distance + "distance = " + distance + "setscreen on");
-								setScreen(1);
-								if (mMediaPlayer != null)
-									mMediaPlayer.start();
-
-							}
-						}
-					}
-				}
-			}
-			try {
-				sleep(10);
-			} catch (InterruptedException e) {
-				e.printStackTrace();
-			}
-
-		}
-	}
 
 	private void dealWithData(byte[] buffer, int size)
 	{
