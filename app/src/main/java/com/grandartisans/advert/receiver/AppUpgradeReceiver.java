@@ -22,10 +22,10 @@ public class AppUpgradeReceiver extends BroadcastReceiver {
 			it.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
 			context.startActivity(it);
 
-			Intent intentService = new Intent(context,RemoteService.class);
-			context.startService(intentService);
+			//Intent intentService = new Intent(context,RemoteService.class);
+			//context.startService(intentService);
 
-			intentService = new Intent(context,UpgradeService.class);
+			Intent intentService = new Intent(context,UpgradeService.class);
 			context.startService(intentService);
 		}
 	}
