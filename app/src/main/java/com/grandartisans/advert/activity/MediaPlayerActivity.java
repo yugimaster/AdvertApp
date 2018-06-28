@@ -435,11 +435,13 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 		    //screenScale(3);
 			//scaleDisplay(3);
         }else if(keyCode == KeyEvent.KEYCODE_DPAD_CENTER ) {
+			/*
 			if(isScaleMode()){
 				setScaleMode(false);
 			}else {
 				showSetDistanceDialog(MediaPlayerActivity.this);
 			}
+			*/
         }else if(keyCode == KeyEvent.KEYCODE_MENU) {
 			startSysSetting(MediaPlayerActivity.this);
 		}else if(keyCode == KeyEvent.KEYCODE_BACK || keyCode == KeyEvent.KEYCODE_BACKSLASH){
