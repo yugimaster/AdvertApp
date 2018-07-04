@@ -23,6 +23,7 @@ import com.grandartisans.advert.activity.MediaPlayerActivity;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.LineNumberReader;
+import java.lang.reflect.Method;
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
 import java.util.Calendar;
@@ -259,6 +260,36 @@ public class CommonUtil {
             ex.printStackTrace();
         }
         return macSerial;
+    }
+
+    private static String get(String prop, String defaultvalue) {
+        Method get = null;
+        String value = defaultvalue;
+        try {
+            if (null == get) {
+                    if (null == get) {
+                        Class<?> cls = Class.forName("android.os.SystemProperties");
+                        get = cls.getDeclaredMethod("get", new Class<?>[]{String.class, String.class});
+                    }
+            }
+            value = (String) (get.invoke(null, new Object[]{prop, defaultvalue}));
+        } catch (Throwable e) {
+            e.printStackTrace();
+        }
+        return value;
+    }
+
+    public static String getVersionInfo(){
+        String version="";
+        version = get("ro.build.version.versioncode","");
+        if(version!=null && version.length()>0){
+            int start = version.indexOf("_V");
+            int index = version.lastIndexOf("_");
+            if(start >=0 && index >=0){
+                version = version.substring(start+2, index);
+            }
+        }
+        return version;
     }
 
 }

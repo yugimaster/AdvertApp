@@ -16,6 +16,7 @@ import com.grandartisans.advert.model.entity.post.AdvertParameter;
 import com.grandartisans.advert.model.entity.post.AppUpgradeParameter;
 import com.grandartisans.advert.model.entity.post.HeartBeatParameter;
 import com.grandartisans.advert.model.entity.post.TokenParameter;
+import com.grandartisans.advert.model.entity.post.UserAgent;
 import com.grandartisans.advert.model.entity.res.AdListHttpResult;
 import com.grandartisans.advert.model.entity.res.Advert;
 import com.grandartisans.advert.model.entity.res.AdvertFile;
@@ -162,6 +163,12 @@ public class UpgradeService extends Service {
         TokenParameter tokenParameter = new TokenParameter();
         tokenParameter.setDeviceClientid(CommonUtil.getEthernetMac());
         tokenParameter.setTimestamp(System.currentTimeMillis());
+
+        UserAgent useragent = new UserAgent();
+        useragent.setAppVersionName(Utils.getAppVersionName((getApplicationContext())));
+        useragent.setPlatformVersion(CommonUtil.getVersionInfo());
+        tokenParameter.setUssrAgent(useragent);
+        
         StringBuilder sign = new StringBuilder();
         EncryptUtil encrypt = new EncryptUtil();
         sign.append(tokenParameter.getDeviceClientid()).append("$").append(tokenParameter.getTimestamp()).append("$123456");
