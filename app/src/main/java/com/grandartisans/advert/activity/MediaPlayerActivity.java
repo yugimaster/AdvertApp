@@ -62,6 +62,7 @@ import com.grandartisans.advert.model.entity.res.AdvertVo;
 import com.grandartisans.advert.model.entity.res.DateScheduleVo;
 import com.grandartisans.advert.service.UpgradeService;
 import com.grandartisans.advert.utils.AdvertVersion;
+import com.grandartisans.advert.utils.CommonUtil;
 import com.grandartisans.advert.utils.FileUtils;
 import com.grandartisans.advert.utils.SerialPortUtils;
 
@@ -123,6 +124,8 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 
 	private final int SET_SCREEN_ON_CMD = 100010;
 	private final int START_PLAYER_CMD = 100011;
+
+	private String mMode ="";
 
 	private Handler mHandler = new Handler()
 	{
@@ -223,7 +226,11 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 
 		initVideoList();
 
-		//setDisplay();
+
+		mMode = CommonUtil.getModel();
+		if(mMode.equals("p313")) {
+			setDisplay();
+		}
 
 
 		/*
@@ -252,6 +259,7 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 		pClient = new PicoClient(mPicoOnEventListener, null);
 
 	}
+
 	private void initView(){
 		surface = (MySurfaceView) findViewById(R.id.surface);
 
@@ -278,17 +286,17 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 
                 Log.i(TAG, "video width = " + mMediaPlayer.getVideoWidth() + "video height = " + mMediaPlayer.getVideoHeight());
                 //mMediaPlayer.setVideoScalingMode(MediaPlayer.VIDEO_SCALING_MODE_SCALE_TO_FIT_WITH_CROPPING);
-                //mMediaPlayer.setVideoScalingMode(MediaPlayer.VIDEO_SCALING_MODE_SCALE_TO_FIT);
+                mMediaPlayer.setVideoScalingMode(MediaPlayer.VIDEO_SCALING_MODE_SCALE_TO_FIT);
                 mMediaPlayer.start();
                 if (getScreenStatus() == 0){
                     mMediaPlayer.pause();
 			    }
-			    /*
-				if(player_first_time == true) {
-					player_first_time = false;
-					mMediaPlayer.seekTo(mMediaPlayer.getDuration());
+			    if(mMode.equals("p313")) {
+					if (player_first_time == true) {
+						player_first_time = false;
+						mMediaPlayer.seekTo(mMediaPlayer.getDuration());
+					}
 				}
-				*/
 			}
 		});
 
@@ -405,7 +413,9 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 		super.onResume();
 		Log.i(TAG,"onResume");
 		if(serialPortUtils!=null) serialPortUtils.openSerialPort();
-		threshold_distance = Integer.valueOf(prjmanager.getDistance());
+		if(!mMode.equals("p313")) {
+			threshold_distance = Integer.valueOf(prjmanager.getDistance());
+		}
 		/*
 		if(mMediaPlayer!=null ) {
 			mMediaPlayer.start();
@@ -417,54 +427,54 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 		// TODO Auto-generated method stub
 		Log.i(TAG,"onKeyDown keyCode = " + keyCode);
 		if(keyCode == KeyEvent.KEYCODE_DPAD_LEFT) {
-			//screenScale(1);
-			/*
-			if(isScaleMode()) {
-				scaleDisplay(1);
-			}else{
-				scaleDisplay(5);
+			if(mMode.equals("p313")) {
+				if (isScaleMode()) {
+					scaleDisplay(1);
+				} else {
+					scaleDisplay(5);
+				}
 			}
-			*/
 		}
 		if(keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) {
-			//screenScale(0);
-			/*
-			if(isScaleMode()) {
-				scaleDisplay(0);
-			}else{
-				scaleDisplay(6);
+			if(mMode.equals("p313")) {
+				if (isScaleMode()) {
+					scaleDisplay(0);
+				} else {
+					scaleDisplay(6);
+				}
 			}
-			*/
 		}if(keyCode == KeyEvent.KEYCODE_DPAD_DOWN) {
-		    //screenScale(2);
-			//scaleDisplay(2);
-        }else if(keyCode == KeyEvent.KEYCODE_DPAD_UP){
-		    //screenScale(3);
-			//scaleDisplay(3);
-        }else if(keyCode == KeyEvent.KEYCODE_DPAD_CENTER ) {
-			/*
-			if(isScaleMode()){
-				setScaleMode(false);
-			}else {
-				showSetDistanceDialog(MediaPlayerActivity.this);
+			if(mMode.equals("p313")) {
+				scaleDisplay(2);
 			}
-			*/
+        }else if(keyCode == KeyEvent.KEYCODE_DPAD_UP){
+			if(mMode.equals("p313")) {
+				scaleDisplay(3);
+			}
+        }else if(keyCode == KeyEvent.KEYCODE_DPAD_CENTER ) {
+			if(mMode.equals("p313")) {
+				if (isScaleMode()) {
+					setScaleMode(false);
+				} else {
+					showSetDistanceDialog(MediaPlayerActivity.this);
+				}
+			}
         }else if(keyCode == KeyEvent.KEYCODE_MENU) {
 			startSysSetting(MediaPlayerActivity.this);
 		}else if(keyCode == KeyEvent.KEYCODE_BACK || keyCode == KeyEvent.KEYCODE_BACKSLASH){
 			return true;
 		}else if(keyCode == 138) { //对焦键按下，对屏幕缩放
-			/*
-			if(isScaleMode() == true) {
-				setScaleMode(false);
-				surface.setBackground(null);
-				mMediaPlayer.start();
-			}else {
-				setScaleMode(true);
-				mMediaPlayer.pause();
-				surface.setBackgroundColor(Color.BLUE);
+			if(mMode.equals("p313")) {
+				if (isScaleMode() == true) {
+					setScaleMode(false);
+					surface.setBackground(null);
+					mMediaPlayer.start();
+				} else {
+					setScaleMode(true);
+					mMediaPlayer.pause();
+					surface.setBackgroundColor(Color.BLUE);
+				}
 			}
-			*/
 		}
 		return super.onKeyDown(keyCode, event);
 	}
@@ -605,9 +615,12 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 
 	private void initTFMini() {
 		initserialPort();
-		threshold_distance = Integer.valueOf(prjmanager.getDistance());
+		if(mMode.equals("p313")) {
+			threshold_distance = DevRing.cacheManager().spCache("TFMini").getInt("threshold_distance",0);
+		}else {
+			threshold_distance = Integer.valueOf(prjmanager.getDistance());
+		}
 
-		//threshold_distance = DevRing.cacheManager().spCache("TFMini").getInt("threshold_distance",0);
 		/*
 		if(threshold_distance == 0 ) {
 			showSetDistanceDialog(MediaPlayerActivity.this);

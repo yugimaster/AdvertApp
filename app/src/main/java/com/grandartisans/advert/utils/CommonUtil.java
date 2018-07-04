@@ -291,5 +291,8 @@ public class CommonUtil {
         }
         return version;
     }
-
+    public static String getModel() {
+        String mode = get("ro.product.model","");
+        return mode;
+    }
 }
