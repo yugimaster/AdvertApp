@@ -204,12 +204,12 @@ public class UpgradeService extends Service {
                             if (list != null && list.size() > 0) {
                                 for (int i = 0; i < list.size(); i++) {
                                     PositionVer item = list.get(i);
-                                    if (AdvertVersion.getAdPositionId() > 0) {
-                                        if (item.getAdvertPositionId() == AdvertVersion.getAdPositionId()) {
-                                            if (item.getVersion() != AdvertVersion.getAdVersion(AdvertVersion.getAdPositionId())) {
+                                    if (AdvertVersion.getAdVersion(item.getAdvertPositionId())> 0) {
+                                        //if (item.getAdvertPositionId() == AdvertVersion.getAdPositionId()) {
+                                            if (item.getVersion() != AdvertVersion.getAdVersion(item.getAdvertPositionId())) {
                                                 if (!isDownloadingAdFiles()) getAdList(token);
                                             }
-                                        }
+                                        //}
                                     } else {
                                         if(!isDownloadingAdFiles()) getAdList(token);
                                     }
