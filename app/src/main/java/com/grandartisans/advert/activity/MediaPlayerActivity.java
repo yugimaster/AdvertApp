@@ -278,7 +278,7 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 
                 Log.i(TAG, "video width = " + mMediaPlayer.getVideoWidth() + "video height = " + mMediaPlayer.getVideoHeight());
                 //mMediaPlayer.setVideoScalingMode(MediaPlayer.VIDEO_SCALING_MODE_SCALE_TO_FIT_WITH_CROPPING);
-                mMediaPlayer.setVideoScalingMode(MediaPlayer.VIDEO_SCALING_MODE_SCALE_TO_FIT);
+                //mMediaPlayer.setVideoScalingMode(MediaPlayer.VIDEO_SCALING_MODE_SCALE_TO_FIT);
                 mMediaPlayer.start();
                 if (getScreenStatus() == 0){
                     mMediaPlayer.pause();
@@ -373,7 +373,7 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 	public void surfaceCreated(SurfaceHolder arg0) {
 		//然后初始化播放手段视频的player对象
 		//initPlayer();
-		mHandler.sendEmptyMessageDelayed(START_PLAYER_CMD,2*1000);
+		mHandler.sendEmptyMessageDelayed(START_PLAYER_CMD,1*1000);
 		Log.i(TAG,"surfaceCreated");
 	}
 
@@ -395,11 +395,17 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 		if(mMediaPlayer!=null && mMediaPlayer.isPlaying()) {
 			mMediaPlayer.stop();
 		}
+
+        if(serialPortUtils!=null) {
+			serialPortUtils.closeSerialPort();
+		}
 	}
 	@Override
 	protected void onResume() {
 		super.onResume();
 		Log.i(TAG,"onResume");
+		if(serialPortUtils!=null) serialPortUtils.openSerialPort();
+		threshold_distance = Integer.valueOf(prjmanager.getDistance());
 		/*
 		if(mMediaPlayer!=null ) {
 			mMediaPlayer.start();
@@ -651,7 +657,6 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 	private void initserialPort()
 	{
 		serialPortUtils = new SerialPortUtils();
-		serialPortUtils.openSerialPort();
 		//串口数据监听事件
 		serialPortUtils.setOnDataReceiveListener(new SerialPortUtils.OnDataReceiveListener() {
 			@Override
