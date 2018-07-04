@@ -25,6 +25,10 @@ import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.res.AssetFileDescriptor;
 import android.graphics.Color;
+import android.hardware.Sensor;
+import android.hardware.SensorEvent;
+import android.hardware.SensorEventListener;
+import android.hardware.SensorManager;
 import android.media.AudioManager;
 import android.media.MediaPlayer;
 import android.media.MediaPlayer.OnPreparedListener;
@@ -78,7 +82,7 @@ import org.json.JSONArray;
 
 import gartisans.hardware.pico.PicoClient;
 
-public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callback{
+public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callback,SensorEventListener {
 	private final String TAG = "MediaPlayerActivity";
 	private MediaPlayer mMediaPlayer;
 	private MySurfaceView surface;
@@ -126,6 +130,21 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 	private final int START_PLAYER_CMD = 100011;
 
 	private String mMode ="";
+
+
+	static final float THRESHOLD = 0.2f; //0.08f;
+	static final int LIFT_STATE_INIT = 0;
+	static final int LIFT_STATE_STOP = 1;
+	static final int LIFT_STATE_UP = 2;
+	static final int LIFT_STATE_DOWN = 3;
+	static final int LIFT_STATE_WAITING_STOP = 4;
+
+	private SensorManager mSensorManager;
+	private Sensor mAccSensor;
+	private boolean AccSensorEnabled = false;
+	private int mLiftState=0;
+	private int mChanging=0;
+	private float mInitZ = 0;
 
 	private Handler mHandler = new Handler()
 	{
@@ -217,13 +236,14 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 		handler.postDelayed(runnableAlarm,1000*60*5);
 		prjmanager = PrjSettingsManager.getInstance(this);
 
+		initAccSensor();
 
 		initView();
 
 		initEventBus();//注册事件接收
-
-		initTFMini();//初始化激光测距模块
-
+		if(!AccSensorEnabled) {
+			initTFMini();//初始化激光测距模块
+		}
 		initVideoList();
 
 
@@ -403,19 +423,29 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 		if(mMediaPlayer!=null && mMediaPlayer.isPlaying()) {
 			mMediaPlayer.stop();
 		}
-
-        if(serialPortUtils!=null) {
-			serialPortUtils.closeSerialPort();
+		if(AccSensorEnabled) {
+			mSensorManager.unregisterListener(this);
+		}else {
+			if (serialPortUtils != null) {
+				serialPortUtils.closeSerialPort();
+			}
 		}
 	}
 	@Override
 	protected void onResume() {
 		super.onResume();
 		Log.i(TAG,"onResume");
-		if(serialPortUtils!=null) serialPortUtils.openSerialPort();
-		if(!mMode.equals("p313")) {
-			threshold_distance = Integer.valueOf(prjmanager.getDistance());
+		if(AccSensorEnabled) {
+			mSensorManager.registerListener(this, mAccSensor, 200000);
+			mInitZ = Float.valueOf(prjmanager.getDistance());
+		}else {
+			if (serialPortUtils != null) serialPortUtils.openSerialPort();
+
+			if(!mMode.equals("p313")) {
+				threshold_distance = Integer.valueOf(prjmanager.getDistance());
+			}
 		}
+
 		/*
 		if(mMediaPlayer!=null ) {
 			mMediaPlayer.start();
@@ -626,6 +656,17 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 			showSetDistanceDialog(MediaPlayerActivity.this);
 		}
 		*/
+	}
+
+	private void initAccSensor(){
+		mSensorManager = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
+		mAccSensor = mSensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
+		if(mAccSensor!=null){
+			AccSensorEnabled = true;
+			mInitZ =  Float.valueOf(prjmanager.getDistance());
+		}
+		else AccSensorEnabled = false;
+		Log.i(TAG, "initAccSensor AccSensorEnabled = " + AccSensorEnabled  + " mInitZ = " + mInitZ);
 	}
 
 	private void startSysSetting(Context context) {
@@ -949,4 +990,120 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 		}
 
     }
+
+	/* Filter positive direction*/
+	@Override
+	public void onSensorChanged(SensorEvent sensorEvent) {
+		Sensor eSensor= sensorEvent.sensor;
+
+		if (eSensor.getType() == Sensor.TYPE_ACCELEROMETER) {
+			//float acc = sensorEvent.values[0];
+			//float acc = sensorEvent.values[1];
+			float acc = sensorEvent.values[2];
+			Log.i(TAG, "time:" + sensorEvent.timestamp + "acc_z:" + acc  + "  " +"mLiftState=" + mLiftState);
+			// " X Y Z: " + acc_x + " " + acc_y + " " + acc_z);
+
+			switch (mLiftState) {
+				case LIFT_STATE_INIT:
+					setLiftState(LIFT_STATE_STOP);
+					mInitZ = acc;
+					break;
+
+				case LIFT_STATE_STOP: {
+					float deltaz = acc - mInitZ;
+					if (Math.abs(deltaz) > THRESHOLD) {
+						if (++mChanging == 4) {
+							mChanging = 0;
+							if (deltaz > 0)
+								setLiftState(LIFT_STATE_UP);
+							else
+								setLiftState(LIFT_STATE_DOWN);
+						}
+					} else {
+						if (mChanging != 0) mChanging = 0;
+					}
+					break;
+				}
+
+				case LIFT_STATE_DOWN: {
+					//check decelerate
+					float deltaz = acc - mInitZ;
+					if (deltaz > THRESHOLD) {
+						if (++mChanging == 4) {
+							mChanging = 0;
+							setLiftState(LIFT_STATE_WAITING_STOP);
+						}
+					} else {
+						if (mChanging != 0) mChanging = 0;
+					}
+					break;
+				}
+
+				case LIFT_STATE_WAITING_STOP: {
+					float deltaz = acc - mInitZ;
+					if (Math.abs(deltaz) <= THRESHOLD) {
+						if (++mChanging == 4) {
+							mChanging = 0;
+							setLiftState(LIFT_STATE_STOP);
+						}
+					} else {
+						if (mChanging != 0) mChanging = 0;
+					}
+					break;
+				}
+
+				case LIFT_STATE_UP: {
+					//check decelerate
+					float deltaz = acc - mInitZ;
+					if (deltaz < 0) {
+						if (Math.abs(deltaz) > THRESHOLD) {
+							if (++mChanging == 4) {
+								mChanging = 0;
+								setLiftState(LIFT_STATE_WAITING_STOP);
+							}
+						} else {
+							if (mChanging != 0) mChanging = 0;
+						}
+					}
+					break;
+				}
+			}
+
+			//mLastZ = acc;
+		}
+	}
+
+	@Override
+	public void onAccuracyChanged(Sensor sensor, int i) {
+
+	}
+	private void setLiftState(int liftState) {
+		mLiftState = liftState;
+		Log.i(TAG, "state: " + liftState);
+		//mLiftStateTV.setText(liftStateString(mLiftState));
+		switch (liftState) {
+			case LIFT_STATE_INIT:
+				break;
+			case LIFT_STATE_STOP:
+				setScreen(0);
+				if (mMediaPlayer != null && mMediaPlayer.isPlaying()) {
+					mMediaPlayer.pause();
+				}
+				break;
+			case LIFT_STATE_UP:
+				setScreen(1);
+				if (mMediaPlayer != null)
+					mMediaPlayer.start();
+				break;
+			case LIFT_STATE_DOWN:
+				setScreen(1);
+				if (mMediaPlayer != null)
+					mMediaPlayer.start();
+				break;
+			case LIFT_STATE_WAITING_STOP:
+				break;
+			default:
+				break;
+		}
+	}
 }
