@@ -24,9 +24,6 @@ public class AppUpgradeReceiver extends BroadcastReceiver {
 
 			//Intent intentService = new Intent(context,RemoteService.class);
 			//context.startService(intentService);
-
-			Intent intentService = new Intent(context,UpgradeService.class);
-			context.startService(intentService);
 		}
 	}
 }

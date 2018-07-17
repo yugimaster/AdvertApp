@@ -23,6 +23,7 @@ public class BootReceiver extends BroadcastReceiver {
 			//Intent intentService = new Intent(context,RemoteService.class);
 			//context.startService(intentService);
 		}else if(action.equals("android.net.conn.CONNECTIVITY_CHANGE")){
+			/*
 			NetworkInfo networkInfo = intent.getParcelableExtra(ConnectivityManager.EXTRA_NETWORK_INFO);
 			ConnectivityManager connectivityManager = (ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
 			NetworkInfo activeNetInfo = connectivityManager.getActiveNetworkInfo();
@@ -30,6 +31,7 @@ public class BootReceiver extends BroadcastReceiver {
 				Intent intentService = new Intent(context,UpgradeService.class);
 				context.startService(intentService);
 			}
+			*/
 		}
 	}
 }

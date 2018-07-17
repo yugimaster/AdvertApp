@@ -153,9 +153,11 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 			switch (paramMessage.what)
 			{
 				case SET_SCREEN_ON_CMD:
-					setScreen(1);
-					if (mMediaPlayer != null)
-						mMediaPlayer.start();
+					if(getScreenStatus()!=1 ) {
+						setScreen(1);
+						if (mMediaPlayer != null)
+							mMediaPlayer.start();
+					}
 					break;
 				case START_PLAYER_CMD:
 					initPlayer();
@@ -236,27 +238,29 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 		handler.postDelayed(runnableAlarm,1000*60*5);
 		prjmanager = PrjSettingsManager.getInstance(this);
 
+		mMode = CommonUtil.getModel();
+
 		initAccSensor();
 
 		initView();
 
 		initEventBus();//注册事件接收
-		if(!AccSensorEnabled) {
-			initTFMini();//初始化激光测距模块
-		}
+
+		initTFMini();//初始化激光测距模块
+
 		initVideoList();
 
 
-		mMode = CommonUtil.getModel();
-		if(mMode.equals("p313")) {
+
+		if(mMode.equals("AOSP on p313")) {
 			setDisplay();
 		}
 
 
-		/*
+
 		Intent intentService = new Intent(MediaPlayerActivity.this,UpgradeService.class);
 		startService(intentService);
-		*/
+
 
 		PicoClient.OnEventListener mPicoOnEventListener = new PicoClient.OnEventListener() {
 		    @Override
@@ -311,7 +315,7 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
                 if (getScreenStatus() == 0){
                     mMediaPlayer.pause();
 			    }
-			    if(mMode.equals("p313")) {
+			    if(mMode.equals("AOSP on p313")) {
 					if (player_first_time == true) {
 						player_first_time = false;
 						mMediaPlayer.seekTo(mMediaPlayer.getDuration());
@@ -324,6 +328,7 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 		    @Override public boolean onError(MediaPlayer mp,int what, int extra)
             {
                 Log.d(TAG, "OnError - Error code: " + what + " Extra code: " + extra);
+				onVideoPlayCompleted(mp);
                 return false;
             }
 
@@ -340,6 +345,7 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 	private void startPlay(String url) {
 		try {
 			//mMediaPlayer.setDataSource(url);
+			Log.d(TAG, "start play: url = " + url );
 			mMediaPlayer.setDataSource(MediaPlayerActivity.this,Uri.parse(url));
 			mMediaPlayer.prepareAsync();
 			//mMediaPlayer.prepare();
@@ -379,10 +385,12 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
     }
 	private void onVideoPlayCompleted(MediaPlayer mp) {
 		//get next player
+		Log.i(TAG,"onVideoPlayCompleted format  isPowerOff =  " + isPowerOff);
 		if(!isPowerOff) {
 			mMediaPlayer.reset();
 			playindex++;
 			String url = getValidUrl();
+			Log.i(TAG,"onVideoPlayCompleted validurl  =  " + url);
 			if (url != null && url.length() > 0) {
 				startPlay(url);
 			} else {
@@ -425,10 +433,9 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 		}
 		if(AccSensorEnabled) {
 			mSensorManager.unregisterListener(this);
-		}else {
-			if (serialPortUtils != null) {
-				serialPortUtils.closeSerialPort();
-			}
+		}
+		if (serialPortUtils != null) {
+			serialPortUtils.closeSerialPort();
 		}
 	}
 	@Override
@@ -437,13 +444,12 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 		Log.i(TAG,"onResume");
 		if(AccSensorEnabled) {
 			mSensorManager.registerListener(this, mAccSensor, 200000);
-			mInitZ = Float.valueOf(prjmanager.getDistance());
-		}else {
-			if (serialPortUtils != null) serialPortUtils.openSerialPort();
+			mInitZ = Float.valueOf(prjmanager.getGsensorDefault());
+		}
+		if (serialPortUtils != null) serialPortUtils.openSerialPort();
 
-			if(!mMode.equals("p313")) {
-				threshold_distance = Integer.valueOf(prjmanager.getDistance());
-			}
+		if(!mMode.equals("AOSP on p313")) {
+			threshold_distance = Integer.valueOf(prjmanager.getDistance());
 		}
 
 		/*
@@ -457,7 +463,7 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 		// TODO Auto-generated method stub
 		Log.i(TAG,"onKeyDown keyCode = " + keyCode);
 		if(keyCode == KeyEvent.KEYCODE_DPAD_LEFT) {
-			if(mMode.equals("p313")) {
+			if(mMode.equals("AOSP on p313")) {
 				if (isScaleMode()) {
 					scaleDisplay(1);
 				} else {
@@ -466,7 +472,7 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 			}
 		}
 		if(keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) {
-			if(mMode.equals("p313")) {
+			if(mMode.equals("AOSP on p313")) {
 				if (isScaleMode()) {
 					scaleDisplay(0);
 				} else {
@@ -474,15 +480,15 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 				}
 			}
 		}if(keyCode == KeyEvent.KEYCODE_DPAD_DOWN) {
-			if(mMode.equals("p313")) {
+			if(mMode.equals("AOSP on p313")) {
 				scaleDisplay(2);
 			}
         }else if(keyCode == KeyEvent.KEYCODE_DPAD_UP){
-			if(mMode.equals("p313")) {
+			if(mMode.equals("AOSP on p313")) {
 				scaleDisplay(3);
 			}
         }else if(keyCode == KeyEvent.KEYCODE_DPAD_CENTER ) {
-			if(mMode.equals("p313")) {
+			if(mMode.equals("AOSP on p313")) {
 				if (isScaleMode()) {
 					setScaleMode(false);
 				} else {
@@ -494,7 +500,7 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 		}else if(keyCode == KeyEvent.KEYCODE_BACK || keyCode == KeyEvent.KEYCODE_BACKSLASH){
 			return true;
 		}else if(keyCode == 138) { //对焦键按下，对屏幕缩放
-			if(mMode.equals("p313")) {
+			if(mMode.equals("AOSP on p313")) {
 				if (isScaleMode() == true) {
 					setScaleMode(false);
 					surface.setBackground(null);
@@ -645,7 +651,7 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 
 	private void initTFMini() {
 		initserialPort();
-		if(mMode.equals("p313")) {
+		if(mMode.equals("AOSP on p313")) {
 			threshold_distance = DevRing.cacheManager().spCache("TFMini").getInt("threshold_distance",0);
 		}else {
 			threshold_distance = Integer.valueOf(prjmanager.getDistance());
@@ -661,9 +667,9 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 	private void initAccSensor(){
 		mSensorManager = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
 		mAccSensor = mSensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
-		if(mAccSensor!=null){
+		if(mMode.equals("GAPEDS4A2")){
 			AccSensorEnabled = true;
-			mInitZ =  Float.valueOf(prjmanager.getDistance());
+			mInitZ =  Float.valueOf(prjmanager.getGsensorDefault());
 		}
 		else AccSensorEnabled = false;
 		Log.i(TAG, "initAccSensor AccSensorEnabled = " + AccSensorEnabled  + " mInitZ = " + mInitZ);
@@ -723,6 +729,10 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 					handler.post(runnable);
 					lastdistance = distance;
 				}
+
+				if(mLiftState != LIFT_STATE_STOP && mLiftState != LIFT_STATE_INIT){
+					handler.post(runnable);
+				}
 			}
 
             Runnable runnable = new Runnable() {
@@ -737,15 +747,16 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
                             if (threshold_distance > 0 && (distance - threshold_distance > 10)) {
                                 if (screenStatus == 1 || screenStatus ==2) {
 									mHandler.removeMessages(SET_SCREEN_ON_CMD);
-                                    Log.i(TAG, "threshold_distance= " + threshold_distance + "distance = " + distance + "setscreen off");
-                                    setScreen(0);
-                                    if (mMediaPlayer != null && mMediaPlayer.isPlaying()) {
-                                        mMediaPlayer.pause();
-                                    }
-
+									if(getScreenStatus()!=0) {
+										Log.i(TAG, "threshold_distance= " + threshold_distance + "distance = " + distance + "setscreen off");
+										setScreen(0);
+										if (mMediaPlayer != null && mMediaPlayer.isPlaying()) {
+											mMediaPlayer.pause();
+										}
+									}
                                 }
                             } else {
-                                if (screenStatus == 0) {
+                                if (mLiftState != LIFT_STATE_STOP && screenStatus == 0) {
 									screenStatus = 2;
                                     Log.i(TAG, "threshold_distance= " + threshold_distance + "distance = " + distance + "setscreen on");
 									mHandler.sendEmptyMessageDelayed(SET_SCREEN_ON_CMD,1000);
@@ -825,23 +836,26 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
         Gson gson = new Gson();
         if (jsondata!=null) {
             adurls = gson.fromJson(jsondata, new TypeToken<List<PlayingAdvert>>() {}.getType());
-        }else{
-        	File path = new File("/system/media/advertList");
-        	if(path.exists()) {
-				File[] files = path.listFiles();// 读取文件夹下文件
-				for (int i = 0; i < files.length; i++) {
-					PlayingAdvert item = new PlayingAdvert();
-					Log.i(TAG,"interal file = " + files[i].getAbsolutePath());
-					item.setPath(files[i].getAbsolutePath());
-					//item.setPath("http://update.thewaxseal.cn/videos/defaultvideo.mp4");
-					adurls_local.add(item);
-				}
+        }
+        File path = new File("/system/media/advertList");
+        if(path.exists()) {
+        	File[] files = path.listFiles();// 读取文件夹下文件
+			for (int i = 0; i < files.length; i++) {
+				PlayingAdvert item = new PlayingAdvert();
+				Log.i(TAG,"interal file = " + files[i].getAbsolutePath());
+				item.setPath(files[i].getAbsolutePath());
+				//item.setPath("http://update.thewaxseal.cn/videos/defaultvideo.mp4");
+				adurls_local.add(item);
 			}
-		}
+        }
+
 	}
 
 	private String  getValidUrl() {
 		String url=null;
+		lock.lock();
+		Log.i(TAG,"adurls size  = " + adurls.size() + "playindex = " + playindex);
+		Log.i(TAG,"adurls_local size  = " + adurls_local.size() + "playindex = " + playindex);
 		if(adurls.size()>0) {
 			int index = playindex % adurls.size();
 			url = adurls.get(index).getPath();
@@ -849,6 +863,7 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 			int index = playindex % adurls_local.size();
 			url = adurls_local.get(index).getPath();
 		}
+		lock.unlock();
 		return url;
 	}
 
@@ -1000,14 +1015,14 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 			//float acc = sensorEvent.values[0];
 			//float acc = sensorEvent.values[1];
 			float acc = sensorEvent.values[2];
-			Log.i(TAG, "time:" + sensorEvent.timestamp + "acc_z:" + acc  + "  " +"mLiftState=" + mLiftState);
+			//Log.i(TAG, "time:" + sensorEvent.timestamp + "acc_z:" + acc  + "  " +"mLiftState=" + mLiftState);
 			// " X Y Z: " + acc_x + " " + acc_y + " " + acc_z);
 
 			switch (mLiftState) {
 				case LIFT_STATE_INIT:
-					setLiftState(LIFT_STATE_STOP);
-					mInitZ = acc;
-					break;
+					//setLiftState(LIFT_STATE_STOP);
+					//mInitZ = acc;
+					//break;
 
 				case LIFT_STATE_STOP: {
 					float deltaz = acc - mInitZ;
@@ -1085,20 +1100,30 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 			case LIFT_STATE_INIT:
 				break;
 			case LIFT_STATE_STOP:
-				setScreen(0);
-				if (mMediaPlayer != null && mMediaPlayer.isPlaying()) {
-					mMediaPlayer.pause();
+				if(getScreenStatus()!=0) {
+					setScreen(0);
+					if (mMediaPlayer != null && mMediaPlayer.isPlaying()) {
+						mMediaPlayer.pause();
+					}
 				}
 				break;
 			case LIFT_STATE_UP:
-				setScreen(1);
-				if (mMediaPlayer != null)
-					mMediaPlayer.start();
+				/*
+				if(getScreenStatus()!=1) {
+					setScreen(1);
+					if (mMediaPlayer != null)
+						mMediaPlayer.start();
+				}
+				*/
 				break;
 			case LIFT_STATE_DOWN:
-				setScreen(1);
-				if (mMediaPlayer != null)
-					mMediaPlayer.start();
+				/*
+				if(getScreenStatus()!=1) {
+					setScreen(1);
+					if (mMediaPlayer != null)
+						mMediaPlayer.start();
+				}
+				*/
 				break;
 			case LIFT_STATE_WAITING_STOP:
 				break;

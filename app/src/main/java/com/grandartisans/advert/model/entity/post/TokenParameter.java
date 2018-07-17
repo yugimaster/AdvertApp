@@ -5,14 +5,14 @@ public class TokenParameter {
     private String rqeuestUuid;
     private long timestamp;
     private String sign;
-    private UserAgent ussrAgent;
+    private UserAgent userAgent;
 
-    public UserAgent getUssrAgent() {
-        return ussrAgent;
+    public UserAgent getUserAgent() {
+        return userAgent;
     }
 
-    public void setUssrAgent(UserAgent ussrAgent) {
-        this.ussrAgent = ussrAgent;
+    public void setUserAgent(UserAgent userAgent) {
+        this.userAgent = userAgent;
     }
 
     public String getDeviceClientid() {

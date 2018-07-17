@@ -38,6 +38,7 @@ import com.grandartisans.advert.utils.AdvertVersion;
 import com.grandartisans.advert.utils.CommonUtil;
 import com.grandartisans.advert.utils.EncryptUtil;
 import com.grandartisans.advert.utils.FileUtils;
+import com.grandartisans.advert.utils.SystemInfoManager;
 import com.grandartisans.advert.utils.Utils;
 import com.ljy.devring.DevRing;
 import com.ljy.devring.http.support.body.ProgressInfo;
@@ -47,6 +48,10 @@ import com.ljy.devring.other.RingLog;
 import com.ljy.devring.util.FileUtil;
 
 import org.greenrobot.eventbus.EventBus;
+import org.xutils.common.Callback;
+import org.xutils.common.task.PriorityExecutor;
+import org.xutils.http.RequestParams;
+import org.xutils.x;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -59,8 +64,12 @@ public class UpgradeService extends Service {
     private final int DOWNLOAD_COMPLITE_CMD = 100001;
     private final int DOWNLOAD_ERROR_CMD = 100002;
     private final int HEART_BEAT_CMD = 10003;
+    private final int UPGRADE_APP_CMD = 10004;
+    private final int GETTOKEN_CMD = 10005;
 
     private final int HEART_BEAT_INTERVAL_TIME = 30*1000;// 心跳检测发送时间
+
+    private final int UPGRADE_INTERVAL_TIME = 10*60*1000;
 
     private int mDownloadStatus = DownloadInfo.STATUS_COMPLETE;
 
@@ -86,6 +95,12 @@ public class UpgradeService extends Service {
                     break;
                 case HEART_BEAT_CMD:
                     heardBeat(mToken);
+                    break;
+                case UPGRADE_APP_CMD:
+                    appUpgrade(getApplicationContext());
+                    break;
+                case  GETTOKEN_CMD:
+                    getToken();
                     break;
                 default:
                     break;
@@ -125,7 +140,7 @@ public class UpgradeService extends Service {
         parameter.setAppIdent(Utils.getAppPackageName(context));
         //parameter.setAppIdent("123456");
         parameter.setAppName(Utils.getAppPackageName(context));
-        parameter.setDeviceClientid(CommonUtil.getEthernetMac());
+        parameter.setDeviceClientid(SystemInfoManager.readFromNandkey("usid").toUpperCase());
         parameter.setRequestUuid(CommonUtil.getRandomString(50));
         parameter.setSystemVersion("2.0.1");
         parameter.setTimestamp(System.currentTimeMillis());
@@ -147,12 +162,13 @@ public class UpgradeService extends Service {
                     }
                 }else {
                     Log.d(TAG,"not need upgrade");
+                    mHandler.sendEmptyMessageDelayed(UPGRADE_APP_CMD, UPGRADE_INTERVAL_TIME);
                 }
             }
 
             @Override
             public void onError(int i, String s) {
-
+                mHandler.sendEmptyMessageDelayed(UPGRADE_APP_CMD, UPGRADE_INTERVAL_TIME);
             }
         },null);
     }
@@ -161,13 +177,13 @@ public class UpgradeService extends Service {
         String signed="";
         AdvertModel mIModel = new AdvertModel();
         TokenParameter tokenParameter = new TokenParameter();
-        tokenParameter.setDeviceClientid(CommonUtil.getEthernetMac());
+        tokenParameter.setDeviceClientid(SystemInfoManager.readFromNandkey("usid").toUpperCase());
         tokenParameter.setTimestamp(System.currentTimeMillis());
 
         UserAgent useragent = new UserAgent();
         useragent.setAppVersionName(Utils.getAppVersionName((getApplicationContext())));
         useragent.setPlatformVersion(CommonUtil.getVersionInfo());
-        tokenParameter.setUssrAgent(useragent);
+        tokenParameter.setUserAgent(useragent);
         
         StringBuilder sign = new StringBuilder();
         EncryptUtil encrypt = new EncryptUtil();
@@ -188,6 +204,7 @@ public class UpgradeService extends Service {
             @Override
             public void onError(int i, String s) {
                 RingLog.d("gettoken error i = " + i + "msg = " + s );
+                mHandler.sendEmptyMessageDelayed(GETTOKEN_CMD, HEART_BEAT_INTERVAL_TIME);
             }
         },null);
 
@@ -196,7 +213,7 @@ public class UpgradeService extends Service {
     private void heardBeat(final String token ) {
         AdvertModel mIModel = new AdvertModel();
         HeartBeatParameter parameter = new HeartBeatParameter();
-        parameter.setDeviceClientid(CommonUtil.getEthernetMac());
+        parameter.setDeviceClientid(SystemInfoManager.readFromNandkey("usid").toUpperCase());
         parameter.setTimestamp(System.currentTimeMillis());
         parameter.setToken(token);
         DevRing.httpManager().commonRequest(mIModel.sendHeartBeat(parameter), new CommonObserver<HeartBeatResult>() {
@@ -241,7 +258,7 @@ public class UpgradeService extends Service {
     private void getAdList(String token) {
         AdvertModel mIModel = new AdvertModel();
         AdvertParameter parameter = new AdvertParameter();
-        parameter.setDeviceClientid(CommonUtil.getEthernetMac());
+        parameter.setDeviceClientid(SystemInfoManager.readFromNandkey("usid").toUpperCase());
         parameter.setRequestUuid(CommonUtil.getRandomString(50));
         parameter.setTimestamp(System.currentTimeMillis());
         parameter.setToken(token);
@@ -321,13 +338,23 @@ public class UpgradeService extends Service {
     private void downloadAdList() {
         boolean finished  = true;
         int size = downloadList.size();
+        Log.d(TAG,"check downloadAdList");
+        for(int k=0;k<size;k++) {/*判断是否已经有下载任务*/
+            DownloadInfo item = downloadList.get(k);
+            if(item.getStatus()==DownloadInfo.STATUS_DOWNLOADING) {
+                Log.d(TAG,"check downloadAdList there is file on downloading");
+                return;
+            }
+        }
         for(int i=0;i<size;i++) {
             DownloadInfo item = downloadList.get(i);
             if(item.getStatus()==DownloadInfo.STATUS_NOT_DOWNLOAD) {
                 item.setStatus(DownloadInfo.STATUS_DOWNLOADING);
                 finished =false;
-                downloadFile(item.getUrl(), item.getFileMd5(), item.getFileMd5() + ".mp4", 1);
-                break;
+                Log.d(TAG,"check downloadAdList  download not DOWNLOAD file: " + item.getUrl());
+                //downloadFile(item.getUrl(), item.getFileMd5(), item.getFileMd5() + ".mp4", 1);
+                downloadWithXutils(item.getUrl(),item.getFileMd5(),item.getFileMd5()+".mp4");
+                return;
             }
         }
         for(int j=0;j<size;j++) {
@@ -335,7 +362,9 @@ public class UpgradeService extends Service {
             if(item.getStatus()==DownloadInfo.STATUS_DOWNLOAD_ERROR) {
                 item.setStatus(DownloadInfo.STATUS_DOWNLOADING);
                 finished = false;
-                downloadFile(item.getUrl(), item.getFileMd5(), item.getFileMd5() + ".mp4", 1);
+                Log.d(TAG,"check downloadAdList  download downlaod error file: " + item.getUrl());
+                //downloadFile(item.getUrl(), item.getFileMd5(), item.getFileMd5() + ".mp4", 1);
+                downloadWithXutils(item.getUrl(),item.getFileMd5(),item.getFileMd5()+".mp4");
                 break;
             }
         }
@@ -411,7 +440,8 @@ public class UpgradeService extends Service {
                                 Log.d(TAG,"Download File finished filePath :" + filePath );
                             }
                         }
-                    }else {
+                    }
+                    /*else {
                         if(type == 1) {
                             Message msg = new Message();
                             msg.what = DOWNLOAD_ERROR_CMD;
@@ -419,7 +449,7 @@ public class UpgradeService extends Service {
                             mHandler.sendMessage(msg);
                             Log.d(TAG, "Download ad file Failed:" + filePath);
                         }
-                    }
+                    }*/
                 }
 
                 @Override
@@ -428,8 +458,9 @@ public class UpgradeService extends Service {
                         Message msg = new Message();
                         msg.what = DOWNLOAD_ERROR_CMD;
                         msg.obj = fileMd5;
-                        mHandler.sendMessage(msg);
-                        Log.d(TAG, "Download ad file Failed:" + fileName);
+                        mHandler.removeMessages(DOWNLOAD_ERROR_CMD);
+                        mHandler.sendMessageDelayed(msg,1000);
+                        Log.d(TAG, "onError Download ad file Failed:" + fileName);
                     }
                 }
 
@@ -440,5 +471,75 @@ public class UpgradeService extends Service {
             };
         //}
         DevRing.httpManager().downloadRequest(file, mIModel.downloadFile(downloadURL), mDownloadObserver, null);
+    }
+
+    private void downloadWithXutils(String url,final  String fileMd5,final String fileName){
+
+        final String filePath = FileUtil.getExternalCacheDir(getApplicationContext()) + "/" + fileName;
+        //设置请求参数
+        RequestParams params = new RequestParams(url);
+        params.setAutoResume(true);//设置是否在下载是自动断点续传
+        params.setAutoRename(false);//设置是否根据头信息自动命名文件
+        params.setSaveFilePath(filePath);
+        params.setExecutor(new PriorityExecutor(2, true));//自定义线程池,有效的值范围[1, 3], 设置为3时, 可能阻塞图片加载.
+        params.setCancelFast(true);//是否可以被立即停止.
+        //下面的回调都是在主线程中运行的,这里设置的带进度的回调
+        Callback.Cancelable cancelable = x.http().get(params, new Callback.ProgressCallback<File>() {
+            @Override
+            public void onCancelled(CancelledException arg0) {
+                Log.i("tag", "取消"+Thread.currentThread().getName());
+            }
+
+            @Override
+            public void onError(Throwable arg0, boolean arg1) {
+                Log.i("tag", "onError: 失败"+Thread.currentThread().getName());
+                Message msg = new Message();
+                msg.what = DOWNLOAD_ERROR_CMD;
+                msg.obj = fileMd5;
+                mHandler.removeMessages(DOWNLOAD_ERROR_CMD);
+                mHandler.sendMessageDelayed(msg,1000);
+                Log.d(TAG, "onError Download ad file Failed:" + fileName);
+            }
+
+            @Override
+            public void onFinished() {
+                Log.i("tag", "完成,每次取消下载也会执行该方法"+Thread.currentThread().getName());
+            }
+
+            @Override
+            public void onSuccess(File arg0) {
+                Log.i("tag", "下载成功的时候执行"+Thread.currentThread().getName());
+
+                String downloadmd5 = EncryptUtil.md5sum(filePath);
+                Log.i(TAG,"DownloadSuccess:" + filePath + "downloadmd5 = " + downloadmd5 + "fileMd5 = " + fileMd5 );
+                if(downloadmd5.equals(fileMd5)) {
+                        Message msg = new Message();
+                        msg.what = DOWNLOAD_COMPLITE_CMD;
+                        msg.obj = fileMd5;
+                        mHandler.sendMessage(msg);
+                        EventBus.getDefault().post(new AppEvent(AppEvent.ADVERT_DOWNLOAD_FINISHED_EVENT,filePath));
+                        Log.d(TAG,"Download File finished filePath :" + filePath );
+                }
+            }
+
+            @Override
+            public void onLoading(long total, long current, boolean isDownloading) {
+                if (isDownloading) {
+
+                    //Log.i("tag", "下载中,会不断的进行回调:"+Thread.currentThread().getName());
+                }
+            }
+
+            @Override
+            public void onStarted() {
+                Log.i("tag", "开始下载的时候执行"+Thread.currentThread().getName());
+            }
+
+            @Override
+            public void onWaiting() {
+                Log.i("tag", "等待,在onStarted方法之前执行"+Thread.currentThread().getName());
+            }
+
+        });
     }
 }

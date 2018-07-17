@@ -295,4 +295,8 @@ public class CommonUtil {
         String mode = get("ro.product.model","");
         return mode;
     }
+    public static String getUsid() {
+        String mode = get("ro.product.model","");
+        return mode;
+    }
 }
