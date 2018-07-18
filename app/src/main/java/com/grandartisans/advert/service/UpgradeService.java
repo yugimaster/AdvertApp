@@ -240,11 +240,13 @@ public class UpgradeService extends Service {
                                 }
                             }
                         }
+                        mHandler.sendEmptyMessageDelayed(HEART_BEAT_CMD, HEART_BEAT_INTERVAL_TIME);
                     }else if(result.getStatus()==9800) { // token 已过期 ，重新获取
+                        mHandler.removeMessages(HEART_BEAT_CMD);
                         getToken();
                     }
                 }
-                mHandler.sendEmptyMessageDelayed(HEART_BEAT_CMD, HEART_BEAT_INTERVAL_TIME);
+
             }
 
             @Override
