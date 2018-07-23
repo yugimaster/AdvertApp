@@ -57,6 +57,7 @@ import android.widget.VideoView;
 
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
+import com.grandartisans.advert.app.AdvertApp;
 import com.grandartisans.advert.model.entity.DownloadInfo;
 import com.grandartisans.advert.model.entity.PlayingAdvert;
 import com.grandartisans.advert.model.entity.event.AppEvent;
@@ -209,14 +210,30 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 		@Override
 		public void run() {
             lock.lock();
-                isPowerOff = true;
+            if(isPowerOff==false) {
+				isPowerOff = true;
 
-                if (mMediaPlayer != null && mMediaPlayer.isPlaying()) {
-                    mMediaPlayer.stop();
-                }
-                setScreen(0);
+				if (mMediaPlayer != null && mMediaPlayer.isPlaying()) {
+					mMediaPlayer.stop();
+				}
+				setScreen(0);
+			}
             lock.unlock();
 
+			//initPowerOnAlarm(13,10,00);
+		}
+	};
+
+	Runnable runableSetPowerOn = new Runnable() {
+		@Override
+		public void run() {
+			lock.lock();
+			if(isPowerOff==true) {
+				isPowerOff = false;
+				setScreen(1);
+				onVideoPlayCompleted();
+			}
+			lock.unlock();
 			//initPowerOnAlarm(13,10,00);
 		}
 	};
@@ -302,13 +319,13 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 				.setOnCompletionListener(new MediaPlayer.OnCompletionListener() {
 					@Override
 					public void onCompletion(MediaPlayer mp) {
-						onVideoPlayCompleted(mp);
+						onVideoPlayCompleted();
 					}
 				});
 		mMediaPlayer.setOnPreparedListener(new MediaPlayer.OnPreparedListener(){
 			@Override public void onPrepared(MediaPlayer mp) {
 
-                Log.i(TAG, "video width = " + mMediaPlayer.getVideoWidth() + "video height = " + mMediaPlayer.getVideoHeight());
+                Log.i(TAG, "video width = " + mMediaPlayer.getVideoWidth() + "video height = " + mMediaPlayer.getVideoHeight() + "screenStatus = " + getScreenStatus());
                 //mMediaPlayer.setVideoScalingMode(MediaPlayer.VIDEO_SCALING_MODE_SCALE_TO_FIT_WITH_CROPPING);
                 mMediaPlayer.setVideoScalingMode(MediaPlayer.VIDEO_SCALING_MODE_SCALE_TO_FIT);
                 mMediaPlayer.start();
@@ -328,7 +345,7 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 		    @Override public boolean onError(MediaPlayer mp,int what, int extra)
             {
                 Log.d(TAG, "OnError - Error code: " + what + " Extra code: " + extra);
-				onVideoPlayCompleted(mp);
+				onVideoPlayCompleted();
                 return false;
             }
 
@@ -383,7 +400,7 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 
         }
     }
-	private void onVideoPlayCompleted(MediaPlayer mp) {
+	private void onVideoPlayCompleted() {
 		//get next player
 		Log.i(TAG,"onVideoPlayCompleted format  isPowerOff =  " + isPowerOff);
 		if(!isPowerOff) {
@@ -409,6 +426,11 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 	public void surfaceCreated(SurfaceHolder arg0) {
 		//然后初始化播放手段视频的player对象
 		//initPlayer();
+		DevRing.cacheManager().spCache("PowerStatus").put("status","off");
+		String status = DevRing.cacheManager().spCache("PowerStatus").getString("status","on");
+		if(status.equals("off")){
+			handler.post(runableSetPowerOff);
+		}
 		mHandler.sendEmptyMessageDelayed(START_PLAYER_CMD,1*1000);
 		Log.i(TAG,"surfaceCreated");
 	}
@@ -859,9 +881,16 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 		if(adurls.size()>0) {
 			int index = playindex % adurls.size();
 			url = adurls.get(index).getPath();
+			AdvertApp.setPlayingAdvert(adurls.get(index));
+
 		}else if(adurls_local.size()>0) {
 			int index = playindex % adurls_local.size();
 			url = adurls_local.get(index).getPath();
+			PlayingAdvert playingItem = new PlayingAdvert();
+			Long id = Long.valueOf(0);
+			playingItem.setAdPositionID(id);
+			playingItem.setAdvertid(id);
+			AdvertApp.setPlayingAdvert(playingItem);
 		}
 		lock.unlock();
 		return url;
@@ -871,6 +900,7 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 		//playindex=0;
 		if(dateScheduleVos!=null && dateScheduleVos.size()>0) {
             List<AdvertVo> packageAdverts = dateScheduleVos.get(0).getTimeScheduleVos().get(0).getPackageAdverts();
+            Long adPositionId = dateScheduleVos.get(0).getDateSchedule().getAdvertPositionId();
             int size = packageAdverts.size();
             for (int i = 0; i < size; i++) {
                 AdvertVo advertVo = packageAdverts.get(i);
@@ -881,6 +911,8 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
                         PlayingAdvert item = new PlayingAdvert();
                         item.setPath(path);
                         item.setMd5(advertFile.getFileMd5());
+                        item.setAdvertid(advertFile.getAdvertid());
+                        item.setAdPositionID(adPositionId);
                         adurls.add(item);
                     }
                 }
@@ -964,13 +996,6 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
         am.setExact(AlarmManager.RTC_WAKEUP, cal.getTimeInMillis(), pi);
 	}
 
-	private void reboot (){
-		Intent intent = new Intent(Intent.ACTION_REBOOT);
-		intent.putExtra("nowait", 1);
-		intent.putExtra("interval", 1);
-		intent.putExtra("window", 0);
-		sendBroadcast(intent);
-	}
 
     //接收事件总线发来的事件
     @Subscribe(sticky = true, threadMode = ThreadMode.MAIN) //如果使用默认的EventBus则使用此@Subscribe
@@ -996,8 +1021,16 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 					handler.post(runableSetPowerOff);
 
 				}else if("POWER_ON_ALARM".equals(event.getData())){
-					reboot();
+					CommonUtil.reboot(MediaPlayerActivity.this);
 				}
+				break;
+			case AppEvent.SET_POWER_OFF:
+				handler.post(runableSetPowerOff);
+				DevRing.cacheManager().spCache("PowerStatus").put("status","off");
+				break;
+			case AppEvent.SET_POWER_ON:
+				DevRing.cacheManager().spCache("PowerStatus").put("status","on");
+				handler.post(runableSetPowerOn);
 				break;
 			default:
 				break;

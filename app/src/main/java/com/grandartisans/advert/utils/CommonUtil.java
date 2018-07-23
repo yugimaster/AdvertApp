@@ -299,4 +299,12 @@ public class CommonUtil {
         String mode = get("ro.product.model","");
         return mode;
     }
+
+    public static void reboot (Context context){
+        Intent intent = new Intent(Intent.ACTION_REBOOT);
+        intent.putExtra("nowait", 1);
+        intent.putExtra("interval", 1);
+        intent.putExtra("window", 0);
+        context.sendBroadcast(intent);
+    }
 }

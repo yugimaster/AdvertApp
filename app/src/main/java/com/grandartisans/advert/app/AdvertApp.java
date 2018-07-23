@@ -7,6 +7,7 @@ import com.aspsine.multithreaddownload.DownloadConfiguration;
 import com.aspsine.multithreaddownload.DownloadManager;
 import com.aspsine.multithreaddownload.util.FileUtils;
 import com.grandartisans.advert.app.constant.UrlConstants;
+import com.grandartisans.advert.model.entity.PlayingAdvert;
 import com.ljy.devring.DevRing;
 import com.ljy.devring.util.FileUtil;
 import org.xutils.x;
@@ -16,6 +17,7 @@ import org.xutils.x;
  */
 public class AdvertApp extends Application {
     private static Context sContext;
+    private static PlayingAdvert mAdvert;
 
     @Override
     public void onCreate() {
@@ -104,6 +106,12 @@ public class AdvertApp extends Application {
         DownloadManager.getInstance().init(getApplicationContext(), configuration);
     }
 
+    public static PlayingAdvert getPlayingAdvert(){
+        return mAdvert;
+    }
+    public static void setPlayingAdvert(PlayingAdvert advert){
+        mAdvert = advert;
+    }
     public static Context getContext() {
         return sContext;
     }

@@ -5,6 +5,8 @@ public class PlayingAdvert {
     private String md5;
     private String startTime;
     private String endTime;
+    private Long advertid;
+    private Long adPositionID;
 
     public String getPath() {
         return path;
@@ -36,5 +38,21 @@ public class PlayingAdvert {
 
     public void setEndTime(String endTime) {
         this.endTime = endTime;
+    }
+
+    public Long getAdvertid() {
+        return advertid;
+    }
+
+    public void setAdvertid(Long advertid) {
+        this.advertid = advertid;
+    }
+
+    public Long getAdPositionID() {
+        return adPositionID;
+    }
+
+    public void setAdPositionID(Long adPositionID) {
+        this.adPositionID = adPositionID;
     }
 }

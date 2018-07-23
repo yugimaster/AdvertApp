@@ -8,13 +8,21 @@ import android.os.IBinder;
 import android.os.Message;
 import android.util.Log;
 
+import com.google.gson.Gson;
+import com.google.gson.reflect.TypeToken;
+import com.grandartisans.advert.activity.MediaPlayerActivity;
+import com.grandartisans.advert.app.AdvertApp;
 import com.grandartisans.advert.model.AdvertModel;
 import com.grandartisans.advert.model.DownloadModel;
 import com.grandartisans.advert.model.entity.DownloadInfo;
+import com.grandartisans.advert.model.entity.PlayingAdvert;
 import com.grandartisans.advert.model.entity.event.AppEvent;
 import com.grandartisans.advert.model.entity.post.AdvertParameter;
+import com.grandartisans.advert.model.entity.post.AdvertPositionContent;
 import com.grandartisans.advert.model.entity.post.AppUpgradeParameter;
+import com.grandartisans.advert.model.entity.post.DownLoadContent;
 import com.grandartisans.advert.model.entity.post.HeartBeatParameter;
+import com.grandartisans.advert.model.entity.post.ReportInfoParameter;
 import com.grandartisans.advert.model.entity.post.TokenParameter;
 import com.grandartisans.advert.model.entity.post.UserAgent;
 import com.grandartisans.advert.model.entity.res.AdListHttpResult;
@@ -29,6 +37,7 @@ import com.grandartisans.advert.model.entity.res.DateScheduleVo;
 import com.grandartisans.advert.model.entity.res.HeartBeatData;
 import com.grandartisans.advert.model.entity.res.HeartBeatResult;
 import com.grandartisans.advert.model.entity.res.PositionVer;
+import com.grandartisans.advert.model.entity.res.ReportInfoResult;
 import com.grandartisans.advert.model.entity.res.TemplateRegion;
 import com.grandartisans.advert.model.entity.res.TimeSchedule;
 import com.grandartisans.advert.model.entity.res.TimeScheduleVo;
@@ -222,21 +231,94 @@ public class UpgradeService extends Service {
                 RingLog.d("send HeartBeat ok status = " + result.getStatus() );
                 if(result!=null){
                     if(result.getStatus()==0) {
-                        HeartBeatData data = result.getData();
-                        if (data != null) {
-                            List<PositionVer> list = data.getList();
-                            if (list != null && list.size() > 0) {
-                                for (int i = 0; i < list.size(); i++) {
-                                    PositionVer item = list.get(i);
-                                    if (AdvertVersion.getAdVersion(item.getAdvertPositionId())> 0) {
-                                        //if (item.getAdvertPositionId() == AdvertVersion.getAdPositionId()) {
-                                            if (item.getVersion() != AdvertVersion.getAdVersion(item.getAdvertPositionId())) {
+                        List<HeartBeatData> data = result.getData();
+
+                        if (data != null && data.size()>0) {
+                            for (int j = 0; j < data.size(); j++) {
+                                HeartBeatData dataItem = data.get(j);
+                                if (dataItem.getEventID().equals("1001")) { /*广告版本更新检查*/
+                                    //List<PositionVer> list = (List<PositionVer>)dataItem.getEventData();
+                                    List<PositionVer> list = new ArrayList<>();
+                                    if(dataItem.getEventData().getClass().equals(list.getClass())){
+                                        String eventDataString = dataItem.getEventData().toString();
+                                        Gson gson = new Gson();
+                                        if (eventDataString!=null) {
+                                            list = gson.fromJson(eventDataString, new TypeToken<List<PositionVer>>() {}.getType());
+                                        }
+                                    }
+                                    //List<PositionVer> list = ( List<PositionVer>)dataItem.getEventData();
+
+                                    //RingLog.d("send HeartBeat  eventData =  " + eventDataString);
+
+                                    if (list != null && list.size() > 0) {
+                                        for (int i = 0; i < list.size(); i++) {
+                                            PositionVer item = (PositionVer)list.get(i);
+                                            RingLog.d("send HeartBeat  positionID " + item.getAdvertPositionId() + "version = " + item.getVersion() );
+                                            if (AdvertVersion.getAdVersion(item.getAdvertPositionId()) > 0) {
+                                                //if (item.getAdvertPositionId() == AdvertVersion.getAdPositionId()) {
+                                                if (item.getVersion() != AdvertVersion.getAdVersion(item.getAdvertPositionId())) {
+                                                    if (!isDownloadingAdFiles()) getAdList(token);
+                                                }
+                                                //}
+                                            } else {
                                                 if (!isDownloadingAdFiles()) getAdList(token);
                                             }
-                                        //}
-                                    } else {
-                                        if(!isDownloadingAdFiles()) getAdList(token);
+
+                                        }
                                     }
+                                }else if(dataItem.getEventID().equals("1002")) {/*关机事件*/
+                                    EventBus.getDefault().post(new AppEvent(AppEvent.SET_POWER_OFF,""));
+                                }else if(dataItem.getEventID().equals("1003")) {/*开机事件*/
+                                    EventBus.getDefault().post(new AppEvent(AppEvent.SET_POWER_ON,""));
+                                }else if(dataItem.getEventID().equals("1004")) {/*重启事件*/
+                                    CommonUtil.reboot(getApplicationContext());
+                                }else if(dataItem.getEventID().equals("1005")) {/*查看下载情况*/
+                                    List<DownLoadContent> downLoadContents = new ArrayList<DownLoadContent>();
+                                    List<HeartBeatData> dataList = new ArrayList<HeartBeatData>();
+                                    HeartBeatData infoData = new HeartBeatData();
+                                    infoData.setEventID("1005");
+
+                                    DownloadInfo info = getDownloadingAdInfo();
+                                    if(info!=null) {
+                                        DownLoadContent downLoadContent = new DownLoadContent();
+                                        downLoadContent.setAdvertId(info.getId());
+                                        downLoadContent.setStatus(1);
+                                        downLoadContent.setUrl(info.getUrl());
+                                        downLoadContents.add(downLoadContent);
+
+                                    }
+                                    infoData.setEventData(downLoadContents);
+                                    dataList.add(infoData);
+
+                                    ReportInfoParameter infoParameter = new ReportInfoParameter();
+                                    infoParameter.setDeviceClientid(SystemInfoManager.readFromNandkey("usid").toUpperCase());
+                                    infoParameter.setTimestamp(System.currentTimeMillis());
+                                    infoParameter.setToken(token);
+                                    infoParameter.setData(dataList);
+                                    reportInfo(infoParameter);
+
+                                }else if(dataItem.getEventID().equals("1006")) {/*查看当前播放内容*/
+                                    PlayingAdvert playingAdvert = AdvertApp.getPlayingAdvert();
+                                    List<AdvertPositionContent> advertPositionContentList = new ArrayList<AdvertPositionContent>();
+                                    List<HeartBeatData> dataList = new ArrayList<HeartBeatData>();
+                                    HeartBeatData infoData = new HeartBeatData();
+                                    infoData.setEventID("1006");
+
+                                    AdvertPositionContent advertPositionContent = new AdvertPositionContent();
+                                    advertPositionContent.setAdvertPositionId(playingAdvert.getAdPositionID());
+                                    advertPositionContent.setAdvertId(playingAdvert.getAdvertid());
+                                    advertPositionContentList.add(advertPositionContent);
+
+                                    infoData.setEventData(advertPositionContentList);
+
+                                    dataList.add(infoData);
+
+                                    ReportInfoParameter infoParameter = new ReportInfoParameter();
+                                    infoParameter.setDeviceClientid(SystemInfoManager.readFromNandkey("usid").toUpperCase());
+                                    infoParameter.setTimestamp(System.currentTimeMillis());
+                                    infoParameter.setToken(token);
+                                    infoParameter.setData(dataList);
+                                    reportInfo(infoParameter);
                                 }
                             }
                         }
@@ -253,6 +335,23 @@ public class UpgradeService extends Service {
             public void onError(int i, String s) {
                 RingLog.d("send HeartBeat error  i = " + i + "msg = " + s );
                 mHandler.sendEmptyMessageDelayed(HEART_BEAT_CMD, HEART_BEAT_INTERVAL_TIME);
+            }
+        },null);
+    }
+
+    private void reportInfo(ReportInfoParameter parameter) {
+        AdvertModel mIModel = new AdvertModel();
+
+        DevRing.httpManager().commonRequest(mIModel.reportInfo(parameter), new CommonObserver<ReportInfoResult>() {
+            @Override
+            public void onResult(ReportInfoResult result) {
+                RingLog.d("reportInfo ok status = " + result.getStatus() );
+
+            }
+
+            @Override
+            public void onError(int i, String s) {
+                RingLog.d("reportInfo error i = " + i + "msg = " + s );
             }
         },null);
     }
@@ -386,6 +485,17 @@ public class UpgradeService extends Service {
             }
         }
         return isDownloading;
+    }
+
+    private  DownloadInfo getDownloadingAdInfo(){
+        int size = downloadList.size();
+        for(int i=0;i<size;i++) {
+            DownloadInfo item = downloadList.get(i);
+            if(item.getStatus()!=DownloadInfo.STATUS_COMPLETE) {
+                return item;
+            }
+        }
+        return null;
     }
 
     private void setDownloadStatus(String fileMd5,int status) {

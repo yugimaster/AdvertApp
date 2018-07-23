@@ -1,14 +1,11 @@
 package com.grandartisans.advert.model.entity.res;
 
-import java.util.ArrayList;
-import java.util.List;
-
-public class HeartBeatResult {
+public class ReportInfoResult<T> {
     private boolean success;
     private int status;
     private String msg;
     private String time;
-    private List<HeartBeatData> data  = new ArrayList<>();
+    private T data;
 
     public boolean isSuccess() {
         return success;
@@ -42,11 +39,11 @@ public class HeartBeatResult {
         this.time = time;
     }
 
-    public List<HeartBeatData> getData() {
+    public T getData() {
         return data;
     }
 
-    public void setData(List<HeartBeatData> data) {
+    public void setData(T data) {
         this.data = data;
     }
 }
