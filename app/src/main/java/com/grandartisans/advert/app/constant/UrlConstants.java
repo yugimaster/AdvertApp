@@ -22,4 +22,5 @@ public interface UrlConstants {
     String GET_ADVERT_LIST = "api/schedule/times";
     String  SEND_HEARTBEAT = "api/heartbeat/advert";
     String REPORT_INFO = "api/heartbeat/info";
+    String REPORT_EVENT = "api/event/export";
 }

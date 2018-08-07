@@ -7,10 +7,15 @@ import com.aspsine.multithreaddownload.DownloadConfiguration;
 import com.aspsine.multithreaddownload.DownloadManager;
 import com.aspsine.multithreaddownload.util.FileUtils;
 import com.grandartisans.advert.app.constant.UrlConstants;
+import com.grandartisans.advert.dbutils.dbutils;
 import com.grandartisans.advert.model.entity.PlayingAdvert;
 import com.ljy.devring.DevRing;
 import com.ljy.devring.util.FileUtil;
+
+import org.xutils.DbManager;
 import org.xutils.x;
+
+import java.io.File;
 
 /**
  * Created by Aspsine on 2015/4/20.
@@ -18,14 +23,23 @@ import org.xutils.x;
 public class AdvertApp extends Application {
     private static Context sContext;
     private static PlayingAdvert mAdvert;
+    private static DbManager.DaoConfig daoConfig;
+    private static DbManager db;
+
 
     @Override
     public void onCreate() {
         super.onCreate();
         sContext = getApplicationContext();
 
+
+
+
+
         x.Ext.init(this);//Xutils初始化,这一步之后, 我们就可以在任何地方使用x.app()来获取Application的实例了.
         x.Ext.setDebug(true); /* 是否输出debug日志 */
+
+        dbutils.init(sContext);
 
         //initDownloader();
         if(true) {
@@ -115,6 +129,7 @@ public class AdvertApp extends Application {
     public static Context getContext() {
         return sContext;
     }
+    public static DbManager getDb(){return db;}
 
 
 }

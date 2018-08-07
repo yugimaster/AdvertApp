@@ -58,13 +58,23 @@ import android.widget.VideoView;
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 import com.grandartisans.advert.app.AdvertApp;
+import com.grandartisans.advert.dbutils.PlayRecord;
+import com.grandartisans.advert.dbutils.dbutils;
+import com.grandartisans.advert.model.AdvertModel;
 import com.grandartisans.advert.model.entity.DownloadInfo;
 import com.grandartisans.advert.model.entity.PlayingAdvert;
 import com.grandartisans.advert.model.entity.event.AppEvent;
+import com.grandartisans.advert.model.entity.post.EventParameter;
+import com.grandartisans.advert.model.entity.post.ReportEventData;
+import com.grandartisans.advert.model.entity.post.ReportSchedueVerParameter;
 import com.grandartisans.advert.model.entity.res.AdvertFile;
 import com.grandartisans.advert.model.entity.res.AdvertPosition;
+import com.grandartisans.advert.model.entity.res.AdvertPositionVo;
 import com.grandartisans.advert.model.entity.res.AdvertVo;
 import com.grandartisans.advert.model.entity.res.DateScheduleVo;
+import com.grandartisans.advert.model.entity.res.ReportInfoResult;
+import com.grandartisans.advert.model.entity.res.TemplateRegion;
+import com.grandartisans.advert.model.entity.res.TerminalAdvertPackageVo;
 import com.grandartisans.advert.service.UpgradeService;
 import com.grandartisans.advert.utils.AdvertVersion;
 import com.grandartisans.advert.utils.CommonUtil;
@@ -72,8 +82,12 @@ import com.grandartisans.advert.utils.FileUtils;
 import com.grandartisans.advert.utils.SerialPortUtils;
 
 import com.grandartisans.advert.R;
+import com.grandartisans.advert.utils.SystemInfoManager;
+import com.grandartisans.advert.utils.Utils;
 import com.grandartisans.advert.view.MySurfaceView;
 import com.ljy.devring.DevRing;
+import com.ljy.devring.http.support.observer.CommonObserver;
+import com.ljy.devring.other.RingLog;
 import com.prj.utils.PrjSettingsManager;
 
 import org.greenrobot.eventbus.EventBus;
@@ -95,7 +109,9 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 
 	private List<PlayingAdvert> adurls_local = new ArrayList<PlayingAdvert>();
 
-	List<DateScheduleVo> dateScheduleVos;
+	//List<DateScheduleVo> dateScheduleVos;
+
+	private TerminalAdvertPackageVo mTerminalAdvertPackageVo;
 	/*
 	{"/storage/udisk0/work/videos/58c0d0b04f872.mp4",
 								"/storage/udisk0/work/videos/58c0d1055b43c.mp4",
@@ -129,6 +145,9 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 
 	private final int SET_SCREEN_ON_CMD = 100010;
 	private final int START_PLAYER_CMD = 100011;
+	private final int START_REPORT_EVENT_CMD= 100012;
+	private final int START_REPORT_SCHEDULEVER_CMD = 100013;
+	private final int ON_PAUSE_EVENT_CMD = 100014;
 
 	private String mMode ="";
 
@@ -138,7 +157,14 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 	static final int LIFT_STATE_STOP = 1;
 	static final int LIFT_STATE_UP = 2;
 	static final int LIFT_STATE_DOWN = 3;
-	static final int LIFT_STATE_WAITING_STOP = 4;
+	static final int LIFT_STATE_UP_WAITING_STOP = 4;
+	static final int LIFT_STATE_DOWN_WAITING_STOP = 5;
+	static final int LIFT_STATE_PRE_STOP =6;
+
+
+	static final int DOOR_STATE_INIT  = 0;
+	static final int DOOR_STATE_OPENED  = 1;
+	static final int DOOR_STATE_CLOSED = 2;
 
 	private SensorManager mSensorManager;
 	private Sensor mAccSensor;
@@ -146,6 +172,11 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 	private int mLiftState=0;
 	private int mChanging=0;
 	private float mInitZ = 0;
+	private float mLastZ;
+
+	private int mDoorState = DOOR_STATE_INIT;
+
+	private int mReportEventTimeInterval=5*60*1000;
 
 	private Handler mHandler = new Handler()
 	{
@@ -162,6 +193,15 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 					break;
 				case START_PLAYER_CMD:
 					initPlayer();
+					break;
+				case START_REPORT_EVENT_CMD:
+					ReportPlayRecordAll();
+					break;
+				case START_REPORT_SCHEDULEVER_CMD:
+					ReportScheduleVer();
+					break;
+				case ON_PAUSE_EVENT_CMD:
+					onPauseEvent();
 					break;
 				default:
 					break;
@@ -217,6 +257,8 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 					mMediaPlayer.stop();
 				}
 				setScreen(0);
+
+				mHandler.sendEmptyMessageDelayed(START_REPORT_EVENT_CMD,mReportEventTimeInterval);
 			}
             lock.unlock();
 
@@ -278,7 +320,7 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 		Intent intentService = new Intent(MediaPlayerActivity.this,UpgradeService.class);
 		startService(intentService);
 
-
+		/*
 		PicoClient.OnEventListener mPicoOnEventListener = new PicoClient.OnEventListener() {
 		    @Override
             public void onEvent(PicoClient client, int etype, Object einfo) {
@@ -298,7 +340,7 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 		    }
         };
 		pClient = new PicoClient(mPicoOnEventListener, null);
-
+		*/
 	}
 
 	private void initView(){
@@ -403,6 +445,7 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 	private void onVideoPlayCompleted() {
 		//get next player
 		Log.i(TAG,"onVideoPlayCompleted format  isPowerOff =  " + isPowerOff);
+		savePlayRecord();
 		if(!isPowerOff) {
 			mMediaPlayer.reset();
 			playindex++;
@@ -426,11 +469,11 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 	public void surfaceCreated(SurfaceHolder arg0) {
 		//然后初始化播放手段视频的player对象
 		//initPlayer();
-		DevRing.cacheManager().spCache("PowerStatus").put("status","off");
 		String status = DevRing.cacheManager().spCache("PowerStatus").getString("status","on");
 		if(status.equals("off")){
 			handler.post(runableSetPowerOff);
 		}
+        onResumeEvent();
 		mHandler.sendEmptyMessageDelayed(START_PLAYER_CMD,1*1000);
 		Log.i(TAG,"surfaceCreated");
 	}
@@ -439,6 +482,7 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 	public void surfaceDestroyed(SurfaceHolder arg0) {
 		// TODO 自动生成的方法存根
 		Log.i(TAG,"surfaceDestroyed");
+        onPauseEvent();
 	}
 	@Override
 	protected void onStart() {
@@ -447,9 +491,21 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 	}
 
 	@Override
+	protected void onStop() {
+		super.onStop();
+		Log.i(TAG,"onStop");
+	}
+
+
+	@Override
 	protected void onPause() {
 		super.onPause();
 		Log.i(TAG,"onPause");
+
+		//mHandler.sendEmptyMessageDelayed(ON_PAUSE_EVENT_CMD,1000);
+
+	}
+	private void onPauseEvent(){
 		if(mMediaPlayer!=null && mMediaPlayer.isPlaying()) {
 			mMediaPlayer.stop();
 		}
@@ -464,21 +520,19 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 	protected void onResume() {
 		super.onResume();
 		Log.i(TAG,"onResume");
-		if(AccSensorEnabled) {
-			mSensorManager.registerListener(this, mAccSensor, 200000);
-			mInitZ = Float.valueOf(prjmanager.getGsensorDefault());
-		}
-		if (serialPortUtils != null) serialPortUtils.openSerialPort();
 
-		if(!mMode.equals("AOSP on p313")) {
-			threshold_distance = Integer.valueOf(prjmanager.getDistance());
-		}
 
-		/*
-		if(mMediaPlayer!=null ) {
-			mMediaPlayer.start();
-		}
-		*/
+	}
+	private void onResumeEvent(){
+        if(AccSensorEnabled) {
+            mSensorManager.registerListener(this, mAccSensor, 200000);
+            mInitZ = Float.valueOf(prjmanager.getGsensorDefault());
+        }
+        if (serialPortUtils != null) serialPortUtils.openSerialPort("/dev/" + CommonUtil.getTFMiniDevice());
+
+        if(!mMode.equals("AOSP on p313")) {
+            threshold_distance = Integer.valueOf(prjmanager.getDistance());
+        }
 	}
 	@Override
 	public boolean onKeyDown(int keyCode, KeyEvent event) {
@@ -689,7 +743,7 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 	private void initAccSensor(){
 		mSensorManager = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
 		mAccSensor = mSensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
-		if(mMode.equals("GAPEDS4A2")){
+		if(mMode.equals("GAPEDS4A2")||mMode.equals("GAPEDS4A4")){
 			AccSensorEnabled = true;
 			mInitZ =  Float.valueOf(prjmanager.getGsensorDefault());
 		}
@@ -752,9 +806,10 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 					lastdistance = distance;
 				}
 
-				if(mLiftState != LIFT_STATE_STOP && mLiftState != LIFT_STATE_INIT){
+				if(mLiftState != LIFT_STATE_STOP && mLiftState != LIFT_STATE_PRE_STOP && mLiftState != LIFT_STATE_INIT){
 					handler.post(runnable);
 				}
+
 			}
 
             Runnable runnable = new Runnable() {
@@ -767,6 +822,7 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
                             if(messageTV!=null ) messageTV.setText(message);
                         } else {
                             if (threshold_distance > 0 && (distance - threshold_distance > 10)) {
+                        		//if(mDoorState!=DOOR_STATE_OPENED) mDoorState = DOOR_STATE_OPENED;
                                 if (screenStatus == 1 || screenStatus ==2) {
 									mHandler.removeMessages(SET_SCREEN_ON_CMD);
 									if(getScreenStatus()!=0) {
@@ -778,16 +834,14 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 									}
                                 }
                             } else {
-                                if (mLiftState != LIFT_STATE_STOP && screenStatus == 0) {
-									screenStatus = 2;
-                                    Log.i(TAG, "threshold_distance= " + threshold_distance + "distance = " + distance + "setscreen on");
-									mHandler.sendEmptyMessageDelayed(SET_SCREEN_ON_CMD,1000);
-									/*
-                                    setScreen(1);
-                                    if (mMediaPlayer != null)
-                                        mMediaPlayer.start();
-									*/
-                                }
+								//if(mDoorState!=DOOR_STATE_CLOSED) {
+									//mDoorState = DOOR_STATE_CLOSED;
+									if (mLiftState != LIFT_STATE_STOP &&mLiftState != LIFT_STATE_PRE_STOP   && screenStatus == 0) {
+										screenStatus = 2;
+										Log.i(TAG, "threshold_distance= " + threshold_distance + "distance = " + distance + "setscreen on");
+										mHandler.sendEmptyMessageDelayed(SET_SCREEN_ON_CMD, 1000);
+									}
+								//}
                             }
                         }
                     }
@@ -873,6 +927,125 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 
 	}
 
+	private void savePlayRecord() {
+		if(adurls.size()>0) {
+			int index = playindex % adurls.size();
+			PlayingAdvert item = adurls.get(index);
+			PlayRecord record = new PlayRecord();
+			record.setTpid(item.getTemplateid());
+			record.setApid(item.getAdPositionID());
+			record.setAdid(item.getAdvertid());
+			long currentTime = System.currentTimeMillis();
+			record.setStarttime(currentTime);
+			record.setEndtime(currentTime);
+			record.setCount(1);
+			dbutils.updatePlayCount(record);
+
+			List<PlayRecord> records = dbutils.selectById(PlayRecord.class,record.getTpid(),record.getApid(),record.getAdid());
+			if(records!=null && records.size()>0) {
+				PlayRecord recordItem = records.get(0);
+				if(recordItem.getCount()>=30){
+					ReportPlayRecord(recordItem);
+				}
+			}
+		}
+	}
+
+	private void ReportPlayRecordAll() {
+		List<PlayRecord> records = dbutils.getPlayRecordAll(PlayRecord.class);
+		if(records!=null && records.size()>0) {
+			for(int i=0;i<records.size();i++) {
+				PlayRecord recordItem = records.get(i);
+				if (recordItem.getCount() >0) {
+					ReportPlayRecord(recordItem);
+				}
+			}
+			mHandler.removeMessages(START_REPORT_EVENT_CMD);
+			mHandler.sendEmptyMessageDelayed(START_REPORT_EVENT_CMD,mReportEventTimeInterval);
+		}
+
+	}
+
+	private void ReportScheduleVer()
+	{
+		EventParameter parameter = new EventParameter();
+		parameter.setSn(SystemInfoManager.readFromNandkey("usid").toUpperCase());
+		parameter.setSessionid(CommonUtil.getRandomString(50));
+		parameter.setTimestamp(System.currentTimeMillis());
+		parameter.setToken(UpgradeService.mToken);
+		parameter.setApp(Utils.getAppPackageName(MediaPlayerActivity.this));
+		parameter.setEvent("scheduleVer");
+		parameter.setEventtype(4000);
+
+		parameter.setMac(CommonUtil.getEthernetMac());
+
+		if(adurls.size()>0) {
+			int index = playindex % adurls.size();
+			PlayingAdvert item = adurls.get(index);
+			ReportSchedueVerParameter info = new ReportSchedueVerParameter();
+			info.setTemplateid(item.getTemplateid());
+			info.setAdPositionID(item.getAdPositionID());
+			info.setVersion(AdvertVersion.getAdVersion(item.getAdPositionID()));
+
+			parameter.setEventData(info);
+			parameter.setTimestamp(System.currentTimeMillis());
+			AdvertModel mIModel = new AdvertModel();
+
+			DevRing.httpManager().commonRequest(mIModel.reportEvent(parameter), new CommonObserver<ReportInfoResult>() {
+				@Override
+				public void onResult(ReportInfoResult result) {
+					RingLog.d("reportScheduleVersion  ok status = " + result.getStatus());
+				}
+
+				@Override
+				public void onError(int i, String s) {
+					RingLog.d("reportScheduleVersion error i = " + i + "msg = " + s);
+					handler.removeMessages(START_REPORT_SCHEDULEVER_CMD);
+					handler.sendEmptyMessageDelayed(START_REPORT_SCHEDULEVER_CMD,30*1000);
+				}
+			}, null);
+		}
+	}
+
+	private void ReportPlayRecord(final PlayRecord record)
+	{
+		EventParameter parameter = new EventParameter();
+		parameter.setSn(SystemInfoManager.readFromNandkey("usid").toUpperCase());
+		parameter.setSessionid(CommonUtil.getRandomString(50));
+		parameter.setTimestamp(System.currentTimeMillis());
+		parameter.setToken(UpgradeService.mToken);
+		parameter.setApp(Utils.getAppPackageName(MediaPlayerActivity.this));
+		parameter.setEvent("playRecord");
+		parameter.setEventtype(4000);
+
+		parameter.setMac(CommonUtil.getEthernetMac());
+
+        ReportEventData eventData = new ReportEventData();
+        eventData.setCount(record.getCount());
+        eventData.setAdvertid(record.getAdid());
+        eventData.setAdPositionID(record.getApid());
+        eventData.setTemplateid(record.getTpid());
+        eventData.setStartTime(record.getStarttime());
+        eventData.setEndTime(record.getEndtime());
+        parameter.setEventData(eventData);
+		//parameter.setIp();
+		parameter.setTimestamp(System.currentTimeMillis());
+		AdvertModel mIModel = new AdvertModel();
+
+		DevRing.httpManager().commonRequest(mIModel.reportEvent(parameter), new CommonObserver<ReportInfoResult>() {
+			@Override
+			public void onResult(ReportInfoResult result) {
+				RingLog.d("reportEvent ok status = " + result.getStatus() );
+				dbutils.deletePlayRecord(PlayRecord.class,record.getId());
+			}
+
+			@Override
+			public void onError(int i, String s) {
+				RingLog.d("reportEvent error i = " + i + "msg = " + s );
+			}
+		},null);
+	}
+
 	private String  getValidUrl() {
 		String url=null;
 		lock.lock();
@@ -882,6 +1055,8 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 			int index = playindex % adurls.size();
 			url = adurls.get(index).getPath();
 			AdvertApp.setPlayingAdvert(adurls.get(index));
+
+			PlayRecord record = new PlayRecord();
 
 		}else if(adurls_local.size()>0) {
 			int index = playindex % adurls_local.size();
@@ -898,7 +1073,19 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 
 	private void updateVideoList(String path) {
 		//playindex=0;
-		if(dateScheduleVos!=null && dateScheduleVos.size()>0) {
+
+		if(mTerminalAdvertPackageVo!=null ) {
+			List<DateScheduleVo> dateScheduleVos=null;
+			List<TemplateRegion> regionList  = mTerminalAdvertPackageVo.getTemplate().getRegionList();
+			TemplateRegion region = regionList.get(0);
+			Long advertPositionId = mTerminalAdvertPackageVo.getRelationMap().get(region.getIdent());
+			AdvertPositionVo advertPositionVo = mTerminalAdvertPackageVo.getAdvertPositionMap().get(advertPositionId);
+			if(advertPositionVo!=null) {
+				dateScheduleVos = advertPositionVo.getDateScheduleVos();
+				//mAdverPosition = advertPositionVo.getadvertPosition();
+				int size = dateScheduleVos.size();
+			}
+
             List<AdvertVo> packageAdverts = dateScheduleVos.get(0).getTimeScheduleVos().get(0).getPackageAdverts();
             Long adPositionId = dateScheduleVos.get(0).getDateSchedule().getAdvertPositionId();
             int size = packageAdverts.size();
@@ -913,6 +1100,7 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
                         item.setMd5(advertFile.getFileMd5());
                         item.setAdvertid(advertFile.getAdvertid());
                         item.setAdPositionID(adPositionId);
+                        item.setTemplateid(region.getTemplateid());
                         adurls.add(item);
                     }
                 }
@@ -927,6 +1115,11 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 
 	private void saveAdvertVersion(AdvertPosition advertPosition){
 		AdvertVersion.setAdVersion(advertPosition.getId().intValue(),advertPosition.getVersion());
+		ReportSchedueVerParameter info = new ReportSchedueVerParameter();
+		info.setAdPositionID(advertPosition.getId());
+		info.setVersion(advertPosition.getVersion());
+		info.setTemplateid(mTerminalAdvertPackageVo.getTemplate().getTemplate().getId());
+		ReportScheduleVer();
 	}
 
 	private int getScreenStatus(){
@@ -1008,10 +1201,10 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 				updateVideoList((String)event.getData());
 				break;
 			case AppEvent.ADVERT_LIST_UPDATE_EVENT:
-				dateScheduleVos = (List<DateScheduleVo>)event.getData();
+				mTerminalAdvertPackageVo = (TerminalAdvertPackageVo) event.getData();
 				adurls.clear();
 				playindex = 0;
-				Log.i(TAG,"received event data size =  " + dateScheduleVos.size());
+				//Log.i(TAG,"received event data size =  " + dateScheduleVos.size());
 				break;
 			case AppEvent.ADVERT_LIST_DOWNLOAD_FINISHED_EVENT:
 				saveAdvertVersion((AdvertPosition) event.getData());
@@ -1079,7 +1272,7 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 					if (deltaz > THRESHOLD) {
 						if (++mChanging == 4) {
 							mChanging = 0;
-							setLiftState(LIFT_STATE_WAITING_STOP);
+							setLiftState(LIFT_STATE_DOWN_WAITING_STOP);
 						}
 					} else {
 						if (mChanging != 0) mChanging = 0;
@@ -1087,9 +1280,9 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 					break;
 				}
 
-				case LIFT_STATE_WAITING_STOP: {
+				case LIFT_STATE_PRE_STOP: {
 					float deltaz = acc - mInitZ;
-					if (Math.abs(deltaz) <= THRESHOLD) {
+					if (Math.abs(deltaz) <= 0.08) {
 						if (++mChanging == 4) {
 							mChanging = 0;
 							setLiftState(LIFT_STATE_STOP);
@@ -1099,7 +1292,31 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 					}
 					break;
 				}
+				case LIFT_STATE_UP_WAITING_STOP: {
+					float deltaz = acc - mInitZ;
+					if (acc > mLastZ ) {
+						if (++mChanging == 4) {
+							mChanging = 0;
+							setLiftState(LIFT_STATE_PRE_STOP);
+						}
+					} else {
+						if (mChanging != 0) mChanging = 0;
+					}
+					break;
+				}
 
+				case LIFT_STATE_DOWN_WAITING_STOP: {
+					float deltaz = acc - mInitZ;
+					if (acc < mLastZ) {
+						if (++mChanging == 4) {
+							mChanging = 0;
+							setLiftState(LIFT_STATE_PRE_STOP);
+						}
+					} else {
+						if (mChanging != 0) mChanging = 0;
+					}
+					break;
+				}
 				case LIFT_STATE_UP: {
 					//check decelerate
 					float deltaz = acc - mInitZ;
@@ -1107,7 +1324,7 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 						if (Math.abs(deltaz) > THRESHOLD) {
 							if (++mChanging == 4) {
 								mChanging = 0;
-								setLiftState(LIFT_STATE_WAITING_STOP);
+								setLiftState(LIFT_STATE_UP_WAITING_STOP);
 							}
 						} else {
 							if (mChanging != 0) mChanging = 0;
@@ -1117,7 +1334,7 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 				}
 			}
 
-			//mLastZ = acc;
+			mLastZ = acc;
 		}
 	}
 
@@ -1158,7 +1375,13 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 				}
 				*/
 				break;
-			case LIFT_STATE_WAITING_STOP:
+			case LIFT_STATE_PRE_STOP:
+				if(getScreenStatus()!=0) {
+					setScreen(0);
+					if (mMediaPlayer != null && mMediaPlayer.isPlaying()) {
+						mMediaPlayer.pause();
+					}
+				}
 				break;
 			default:
 				break;

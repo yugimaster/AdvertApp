@@ -11,7 +11,7 @@ import android_serialport_api.SerialPort;
 public class SerialPortUtils {
     private final String TAG = "SerialPortUtils";
     //private String path = "/dev/ttyUSB0";
-    private String path = "/dev/ttyS3";
+    //private String path = "/dev/ttyS3";
     private int baudrate = 115200;
     public boolean serialPortStatus = false; //是否打开串口标志
     public String data_;
@@ -27,8 +27,9 @@ public class SerialPortUtils {
      * 打开串口
      * @return serialPort串口对象
      */
-    public SerialPort openSerialPort(){
+    public SerialPort openSerialPort(String path){
         try {
+            Log.i(TAG, "openSerialPort: device name =  " + path);
             serialPort = new SerialPort(new File(path),baudrate,0);
             this.serialPortStatus = true;
             threadStatus = false; //线程状态
@@ -51,12 +52,12 @@ public class SerialPortUtils {
      */
     public void closeSerialPort(){
         try {
-            inputStream.close();
-            outputStream.close();
+            if(inputStream!=null)inputStream.close();
+            if(outputStream!=null)outputStream.close();
 
             this.serialPortStatus = false;
             this.threadStatus = true; //线程状态
-            serialPort.close();
+            if(serialPort!=null)serialPort.close();
         } catch (IOException e) {
             Log.e(TAG, "closeSerialPort: 关闭串口异常："+e.toString());
             return;

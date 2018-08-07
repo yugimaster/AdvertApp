@@ -5,8 +5,9 @@ public class PlayingAdvert {
     private String md5;
     private String startTime;
     private String endTime;
-    private Long advertid;
-    private Long adPositionID;
+    private long advertid;
+    private long adPositionID;
+    private long templateid;
 
     public String getPath() {
         return path;
@@ -40,19 +41,27 @@ public class PlayingAdvert {
         this.endTime = endTime;
     }
 
-    public Long getAdvertid() {
+    public long getAdvertid() {
         return advertid;
     }
 
-    public void setAdvertid(Long advertid) {
+    public void setAdvertid(long advertid) {
         this.advertid = advertid;
     }
 
-    public Long getAdPositionID() {
+    public long getAdPositionID() {
         return adPositionID;
     }
 
-    public void setAdPositionID(Long adPositionID) {
+    public void setAdPositionID(long adPositionID) {
         this.adPositionID = adPositionID;
+    }
+
+    public long getTemplateid() {
+        return templateid;
+    }
+
+    public void setTemplateid(long templateid) {
+        this.templateid = templateid;
     }
 }

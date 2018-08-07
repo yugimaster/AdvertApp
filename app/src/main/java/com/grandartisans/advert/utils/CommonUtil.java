@@ -299,6 +299,10 @@ public class CommonUtil {
         String mode = get("ro.product.model","");
         return mode;
     }
+    public static String getTFMiniDevice(){
+        String device = get("ro.tfmini.device","ttyS3");
+        return device.trim();
+    }
 
     public static void reboot (Context context){
         Intent intent = new Intent(Intent.ACTION_REBOOT);

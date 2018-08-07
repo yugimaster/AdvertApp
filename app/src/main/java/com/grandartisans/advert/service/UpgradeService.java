@@ -82,7 +82,7 @@ public class UpgradeService extends Service {
 
     private int mDownloadStatus = DownloadInfo.STATUS_COMPLETE;
 
-    private String  mToken ;
+    public static String  mToken ;
     private AdvertPosition mAdverPosition;
 
     private Handler mHandler = new Handler()
@@ -373,11 +373,12 @@ public class UpgradeService extends Service {
                     TemplateRegion region = regionList.get(0);
                     Long advertPositionId = result.getData().getRelationMap().get(region.getIdent());
                     AdvertPositionVo advertPositionVo = result.getData().getAdvertPositionMap().get(advertPositionId);
+                    EventBus.getDefault().post(new AppEvent(AppEvent.ADVERT_LIST_UPDATE_EVENT, result.getData()));
                     if(advertPositionVo!=null) {
                         List<DateScheduleVo> dateScheduleVos = advertPositionVo.getDateScheduleVos();
                         mAdverPosition = advertPositionVo.getadvertPosition();
                         int size = dateScheduleVos.size();
-                        EventBus.getDefault().post(new AppEvent(AppEvent.ADVERT_LIST_UPDATE_EVENT, dateScheduleVos));
+                        //EventBus.getDefault().post(new AppEvent(AppEvent.ADVERT_LIST_UPDATE_EVENT, dateScheduleVos));
                         for (int i = 0; i < size; i++) {
                             DateScheduleVo dateSchedueVo = dateScheduleVos.get(i);
                             DateSchedule dateSchedue = dateSchedueVo.getDateSchedule();
