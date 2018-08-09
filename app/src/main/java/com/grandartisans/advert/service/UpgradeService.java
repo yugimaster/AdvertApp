@@ -167,7 +167,7 @@ public class UpgradeService extends Service {
                     AppUpgradeData data = (AppUpgradeData) appUpgradeDataAdHttpResult.getData();
                     Log.d(TAG,"filePath = " + data.getFilePath());
                     if(data.getFilePath()!=null) {
-                        downloadFile(data.getFilePath(),data.getFileMd5(),"upgrade.apk",0);
+                        downloadWithXutils(data.getFilePath(),data.getFileMd5(),"upgrade.apk",0);
                     }
                 }else {
                     Log.d(TAG,"not need upgrade");
@@ -455,7 +455,7 @@ public class UpgradeService extends Service {
                 finished =false;
                 Log.d(TAG,"check downloadAdList  download not DOWNLOAD file: " + item.getUrl());
                 //downloadFile(item.getUrl(), item.getFileMd5(), item.getFileMd5() + ".mp4", 1);
-                downloadWithXutils(item.getUrl(),item.getFileMd5(),item.getFileMd5()+".mp4");
+                downloadWithXutils(item.getUrl(),item.getFileMd5(),item.getFileMd5()+".mp4",1);
                 return;
             }
         }
@@ -466,7 +466,7 @@ public class UpgradeService extends Service {
                 finished = false;
                 Log.d(TAG,"check downloadAdList  download downlaod error file: " + item.getUrl());
                 //downloadFile(item.getUrl(), item.getFileMd5(), item.getFileMd5() + ".mp4", 1);
-                downloadWithXutils(item.getUrl(),item.getFileMd5(),item.getFileMd5()+".mp4");
+                downloadWithXutils(item.getUrl(),item.getFileMd5(),item.getFileMd5()+".mp4",1);
                 break;
             }
         }
@@ -586,7 +586,7 @@ public class UpgradeService extends Service {
         DevRing.httpManager().downloadRequest(file, mIModel.downloadFile(downloadURL), mDownloadObserver, null);
     }
 
-    private void downloadWithXutils(String url,final  String fileMd5,final String fileName){
+    private void downloadWithXutils(String url,final  String fileMd5,final String fileName,final int type){
 
         final String filePath = FileUtil.getExternalCacheDir(getApplicationContext()) + "/" + fileName;
         //设置请求参数
@@ -606,11 +606,16 @@ public class UpgradeService extends Service {
             @Override
             public void onError(Throwable arg0, boolean arg1) {
                 Log.i("tag", "onError: 失败"+Thread.currentThread().getName());
-                Message msg = new Message();
-                msg.what = DOWNLOAD_ERROR_CMD;
-                msg.obj = fileMd5;
-                mHandler.removeMessages(DOWNLOAD_ERROR_CMD);
-                mHandler.sendMessageDelayed(msg,1000);
+                if(type ==1 ) {
+                    Message msg = new Message();
+                    msg.what = DOWNLOAD_ERROR_CMD;
+                    msg.obj = fileMd5;
+                    mHandler.removeMessages(DOWNLOAD_ERROR_CMD);
+                    mHandler.sendMessageDelayed(msg, 1000);
+                }else if(type == 0 ) {
+                    mHandler.removeMessages(UPGRADE_APP_CMD);
+                    mHandler.sendEmptyMessage(UPGRADE_APP_CMD);
+                }
                 Log.d(TAG, "onError Download ad file Failed:" + fileName);
             }
 
@@ -626,12 +631,16 @@ public class UpgradeService extends Service {
                 String downloadmd5 = EncryptUtil.md5sum(filePath);
                 Log.i(TAG,"DownloadSuccess:" + filePath + "downloadmd5 = " + downloadmd5 + "fileMd5 = " + fileMd5 );
                 if(downloadmd5.equals(fileMd5)) {
+                    if(type ==1 ) {
                         Message msg = new Message();
                         msg.what = DOWNLOAD_COMPLITE_CMD;
                         msg.obj = fileMd5;
                         mHandler.sendMessage(msg);
-                        EventBus.getDefault().post(new AppEvent(AppEvent.ADVERT_DOWNLOAD_FINISHED_EVENT,filePath));
-                        Log.d(TAG,"Download File finished filePath :" + filePath );
+                        EventBus.getDefault().post(new AppEvent(AppEvent.ADVERT_DOWNLOAD_FINISHED_EVENT, filePath));
+                        Log.d(TAG, "Download File finished filePath :" + filePath);
+                    }else if(type == 0) { /*apk 下载*/
+                        Utils.installSilently(filePath);
+                    }
                 }
             }
 
