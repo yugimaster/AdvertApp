@@ -1,6 +1,7 @@
 package com.grandartisans.advert.utils;
 
 import android.app.Activity;
+import android.app.ActivityManager;
 import android.bluetooth.BluetoothAdapter;
 import android.content.ComponentName;
 import android.content.Context;
@@ -13,6 +14,7 @@ import android.os.Build;
 import android.os.Parcelable;
 import android.provider.Settings;
 import android.telephony.TelephonyManager;
+import android.util.Log;
 import android.view.TouchDelegate;
 import android.view.View;
 import android.view.inputmethod.InputMethodManager;
@@ -27,6 +29,7 @@ import java.lang.reflect.Method;
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
 import java.util.Calendar;
+import java.util.List;
 import java.util.Random;
 
 import static android.content.Context.TELEPHONY_SERVICE;
@@ -279,6 +282,26 @@ public class CommonUtil {
         return value;
     }
 
+    private static boolean set(String prop, String value) {
+        Method set = null;
+        try {
+            if (null == set) {
+                if (null == set) {
+                    Class<?> cls = Class.forName("android.os.SystemProperties");
+                    set = cls.getDeclaredMethod("set", new Class<?>[]{String.class, String.class});
+                }
+            }
+            set.invoke(null, new Object[]{prop, value});
+        } catch (Throwable e) {
+            e.printStackTrace();
+        }
+        return true;
+    }
+
+    public static boolean setScreenVideoMode(String mode){
+        return set("tv.default.screen.mode",mode);
+    }
+
     public static String getVersionInfo(){
         String version="";
         version = get("ro.build.version.versioncode","");
@@ -310,5 +333,25 @@ public class CommonUtil {
         intent.putExtra("interval", 1);
         intent.putExtra("window", 0);
         context.sendBroadcast(intent);
+    }
+
+    public static boolean isForeground(Context context, String className) {
+        Log.i("isForeground","className = " + className);
+        if (context == null || className.isEmpty()) {
+            return false;
+        }
+
+        ActivityManager am = (ActivityManager) context.getSystemService(Context.ACTIVITY_SERVICE);
+        List<ActivityManager.RunningTaskInfo> list = am.getRunningTasks(1);
+        Log.i("isForeground","RunningTask list size  = " + list.size());
+        if (list != null && list.size() > 0) {
+            ComponentName cpn = list.get(0).topActivity;
+            Log.i("isForeground","TopActivity = " + cpn.getClassName() );
+            if (className.equals(cpn.getClassName())) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

@@ -79,6 +79,7 @@ import com.grandartisans.advert.service.UpgradeService;
 import com.grandartisans.advert.utils.AdvertVersion;
 import com.grandartisans.advert.utils.CommonUtil;
 import com.grandartisans.advert.utils.FileUtils;
+import com.grandartisans.advert.utils.LogToFile;
 import com.grandartisans.advert.utils.SerialPortUtils;
 
 import com.grandartisans.advert.R;
@@ -171,6 +172,8 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 	private boolean AccSensorEnabled = false;
 	private int mLiftState=0;
 	private int mChanging=0;
+	private int mUpChanging = 0;
+	private int mDownChanging = 0;
 	private float mInitZ = 0;
 	private float mLastZ;
 
@@ -469,6 +472,7 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 	public void surfaceCreated(SurfaceHolder arg0) {
 		//然后初始化播放手段视频的player对象
 		//initPlayer();
+		CommonUtil.setScreenVideoMode("1");
 		String status = DevRing.cacheManager().spCache("PowerStatus").getString("status","on");
 		if(status.equals("off")){
 			handler.post(runableSetPowerOff);
@@ -509,9 +513,11 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 		if(mMediaPlayer!=null && mMediaPlayer.isPlaying()) {
 			mMediaPlayer.stop();
 		}
+		/*
 		if(AccSensorEnabled) {
 			mSensorManager.unregisterListener(this);
 		}
+		*/
 		if (serialPortUtils != null) {
 			serialPortUtils.closeSerialPort();
 		}
@@ -524,10 +530,7 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 
 	}
 	private void onResumeEvent(){
-        if(AccSensorEnabled) {
-            mSensorManager.registerListener(this, mAccSensor, 200000);
-            mInitZ = Float.valueOf(prjmanager.getGsensorDefault());
-        }
+
         if (serialPortUtils != null) serialPortUtils.openSerialPort("/dev/" + CommonUtil.getTFMiniDevice());
 
         if(!mMode.equals("AOSP on p313")) {
@@ -741,6 +744,9 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 	}
 
 	private void initAccSensor(){
+
+        //LogToFile.init(this);
+
 		mSensorManager = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
 		mAccSensor = mSensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
 		if(mMode.equals("GAPEDS4A2")||mMode.equals("GAPEDS4A4")){
@@ -749,6 +755,11 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 		}
 		else AccSensorEnabled = false;
 		Log.i(TAG, "initAccSensor AccSensorEnabled = " + AccSensorEnabled  + " mInitZ = " + mInitZ);
+
+		if(AccSensorEnabled) {
+			mSensorManager.registerListener(this, mAccSensor, 200000);
+			mInitZ = Float.valueOf(prjmanager.getGsensorDefault());
+		}
 	}
 
 	private void startSysSetting(Context context) {
@@ -827,6 +838,7 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 									mHandler.removeMessages(SET_SCREEN_ON_CMD);
 									if(getScreenStatus()!=0) {
 										Log.i(TAG, "threshold_distance= " + threshold_distance + "distance = " + distance + "setscreen off");
+                                        //LogToFile.i(TAG,"threshold_distance= " + threshold_distance + "distance = " + distance + "setscreen off");
 										setScreen(0);
 										if (mMediaPlayer != null && mMediaPlayer.isPlaying()) {
 											mMediaPlayer.pause();
@@ -836,9 +848,10 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
                             } else {
 								//if(mDoorState!=DOOR_STATE_CLOSED) {
 									//mDoorState = DOOR_STATE_CLOSED;
-									if (mLiftState != LIFT_STATE_STOP &&mLiftState != LIFT_STATE_PRE_STOP   && screenStatus == 0) {
+									if ((mLiftState == LIFT_STATE_INIT ||mLiftState == LIFT_STATE_UP ||mLiftState==LIFT_STATE_DOWN) && screenStatus == 0) {
 										screenStatus = 2;
 										Log.i(TAG, "threshold_distance= " + threshold_distance + "distance = " + distance + "setscreen on");
+                                        //LogToFile.i(TAG,"threshold_distance= " + threshold_distance + "distance = " + distance + "setscreen on");
 										mHandler.sendEmptyMessageDelayed(SET_SCREEN_ON_CMD, 1000);
 									}
 								//}
@@ -1243,7 +1256,8 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 			float acc = sensorEvent.values[2];
 			//Log.i(TAG, "time:" + sensorEvent.timestamp + "acc_z:" + acc  + "  " +"mLiftState=" + mLiftState);
 			// " X Y Z: " + acc_x + " " + acc_y + " " + acc_z);
-
+			//Log.i(TAG,"state: " + mLiftState  + "acc_z = " + acc);
+            //LogToFile.i(TAG,"state: " + mLiftState  + "acc_z = " + acc);
 			switch (mLiftState) {
 				case LIFT_STATE_INIT:
 					//setLiftState(LIFT_STATE_STOP);
@@ -1252,16 +1266,22 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 
 				case LIFT_STATE_STOP: {
 					float deltaz = acc - mInitZ;
-					if (Math.abs(deltaz) > THRESHOLD) {
-						if (++mChanging == 4) {
-							mChanging = 0;
-							if (deltaz > 0)
-								setLiftState(LIFT_STATE_UP);
-							else
-								setLiftState(LIFT_STATE_DOWN);
+					if (Math.abs(deltaz) > THRESHOLD && deltaz >0) {
+						mDownChanging = 0;
+						if (++mUpChanging == 8) {
+							mUpChanging = 0;
+							setLiftState(LIFT_STATE_UP);
+						}
+					}else if(Math.abs(deltaz) > THRESHOLD && deltaz <0){
+						mUpChanging = 0;
+						if (++mDownChanging == 8) {
+							mDownChanging = 0;
+							setLiftState(LIFT_STATE_DOWN);
 						}
 					} else {
 						if (mChanging != 0) mChanging = 0;
+						mDownChanging = 0;
+						mUpChanging = 0;
 					}
 					break;
 				}
@@ -1270,9 +1290,9 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 					//check decelerate
 					float deltaz = acc - mInitZ;
 					if (deltaz > THRESHOLD) {
-						if (++mChanging == 4) {
+						if (++mChanging == 8) {
 							mChanging = 0;
-							setLiftState(LIFT_STATE_DOWN_WAITING_STOP);
+							setLiftState(LIFT_STATE_PRE_STOP);
 						}
 					} else {
 						if (mChanging != 0) mChanging = 0;
@@ -1322,9 +1342,9 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 					float deltaz = acc - mInitZ;
 					if (deltaz < 0) {
 						if (Math.abs(deltaz) > THRESHOLD) {
-							if (++mChanging == 4) {
+							if (++mChanging == 8) {
 								mChanging = 0;
-								setLiftState(LIFT_STATE_UP_WAITING_STOP);
+								setLiftState(LIFT_STATE_PRE_STOP);
 							}
 						} else {
 							if (mChanging != 0) mChanging = 0;
@@ -1345,17 +1365,20 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 	private void setLiftState(int liftState) {
 		mLiftState = liftState;
 		Log.i(TAG, "state: " + liftState);
+        //LogToFile.i(TAG,"state: " + liftState);
 		//mLiftStateTV.setText(liftStateString(mLiftState));
 		switch (liftState) {
 			case LIFT_STATE_INIT:
 				break;
 			case LIFT_STATE_STOP:
-				if(getScreenStatus()!=0) {
-					setScreen(0);
-					if (mMediaPlayer != null && mMediaPlayer.isPlaying()) {
-						mMediaPlayer.pause();
-					}
-				}
+			    if(CommonUtil.isForeground(MediaPlayerActivity.this,"com.grandartisans.advert.activity.MediaPlayerActivity")) {
+                    if (getScreenStatus() != 0) {
+                        setScreen(0);
+                        if (mMediaPlayer != null && mMediaPlayer.isPlaying()) {
+                            mMediaPlayer.pause();
+                        }
+                    }
+                }
 				break;
 			case LIFT_STATE_UP:
 				/*
@@ -1375,13 +1398,17 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 				}
 				*/
 				break;
+			//case LIFT_STATE_DOWN_WAITING_STOP:
+			//case LIFT_STATE_UP_WAITING_STOP:
 			case LIFT_STATE_PRE_STOP:
-				if(getScreenStatus()!=0) {
-					setScreen(0);
-					if (mMediaPlayer != null && mMediaPlayer.isPlaying()) {
-						mMediaPlayer.pause();
-					}
-				}
+                if(CommonUtil.isForeground(MediaPlayerActivity.this,"com.grandartisans.advert.activity.MediaPlayerActivity")) {
+                    if (getScreenStatus() != 0) {
+                        setScreen(0);
+                        if (mMediaPlayer != null && mMediaPlayer.isPlaying()) {
+                            mMediaPlayer.pause();
+                        }
+                    }
+                }
 				break;
 			default:
 				break;
