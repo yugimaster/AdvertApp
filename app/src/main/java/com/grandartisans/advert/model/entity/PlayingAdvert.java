@@ -8,6 +8,24 @@ public class PlayingAdvert {
     private long advertid;
     private long adPositionID;
     private long templateid;
+    private String startDate;
+    private String endDate;
+
+    public String getStartDate() {
+        return startDate;
+    }
+
+    public void setStartDate(String startDate) {
+        this.startDate = startDate;
+    }
+
+    public String getEndDate() {
+        return endDate;
+    }
+
+    public void setEndDate(String endDate) {
+        this.endDate = endDate;
+    }
 
     public String getPath() {
         return path;

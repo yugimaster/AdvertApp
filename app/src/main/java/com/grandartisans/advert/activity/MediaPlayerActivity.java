@@ -72,9 +72,11 @@ import com.grandartisans.advert.model.entity.res.AdvertPosition;
 import com.grandartisans.advert.model.entity.res.AdvertPositionVo;
 import com.grandartisans.advert.model.entity.res.AdvertVo;
 import com.grandartisans.advert.model.entity.res.DateScheduleVo;
+import com.grandartisans.advert.model.entity.res.PowerOnOffData;
 import com.grandartisans.advert.model.entity.res.ReportInfoResult;
 import com.grandartisans.advert.model.entity.res.TemplateRegion;
 import com.grandartisans.advert.model.entity.res.TerminalAdvertPackageVo;
+import com.grandartisans.advert.model.entity.res.TimeScheduleVo;
 import com.grandartisans.advert.service.UpgradeService;
 import com.grandartisans.advert.utils.AdvertVersion;
 import com.grandartisans.advert.utils.CommonUtil;
@@ -102,7 +104,7 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 	private final String TAG = "MediaPlayerActivity";
 	private MediaPlayer mMediaPlayer;
 	private MySurfaceView surface;
-	private SurfaceHolder surfaceHolder;;
+	private SurfaceHolder surfaceHolder;
 
 	private TextView messageTV ;
 	private int playindex = 0;
@@ -149,6 +151,7 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 	private final int START_REPORT_EVENT_CMD= 100012;
 	private final int START_REPORT_SCHEDULEVER_CMD = 100013;
 	private final int ON_PAUSE_EVENT_CMD = 100014;
+	private final int SET_POWER_ALARM_CMD = 100015;
 
 	private String mMode ="";
 
@@ -206,6 +209,9 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 				case ON_PAUSE_EVENT_CMD:
 					onPauseEvent();
 					break;
+				case SET_POWER_ALARM_CMD:
+					SetPowerAlarm();
+					break;
 				default:
 					break;
 			}
@@ -239,15 +245,13 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 	}
     ReentrantLock lock = new ReentrantLock();
     //开线程更新UI
-	Runnable runnableAlarm = new Runnable() {
-		@Override
-		public void run() {
+	private void SetPowerAlarm(){
 			//initPowerOffAlarm(22,00,00);// 设置定时关机提醒
 			initPowerOffAlarm(22,00,00);// 设置定时关机提醒
 
 			initPowerOnAlarm(07,00,00);//设置定时开机提醒
-		}
-	};
+
+	}
 
 	Runnable runableSetPowerOff = new Runnable() {
 		@Override
@@ -297,7 +301,7 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 
 
 		handler = new Handler();
-		handler.postDelayed(runnableAlarm,1000*60*5);
+		mHandler.sendEmptyMessageDelayed(SET_POWER_ALARM_CMD,1000*60*5);
 		prjmanager = PrjSettingsManager.getInstance(this);
 
 		mMode = CommonUtil.getModel();
@@ -536,6 +540,9 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
         if(!mMode.equals("AOSP on p313")) {
             threshold_distance = Integer.valueOf(prjmanager.getDistance());
         }
+		if(AccSensorEnabled) {
+			mInitZ = Float.valueOf(prjmanager.getGsensorDefault());
+		}
 	}
 	@Override
 	public boolean onKeyDown(int keyCode, KeyEvent event) {
@@ -1064,14 +1071,22 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 		lock.lock();
 		Log.i(TAG,"adurls size  = " + adurls.size() + "playindex = " + playindex);
 		Log.i(TAG,"adurls_local size  = " + adurls_local.size() + "playindex = " + playindex);
+		boolean urlvalid = false;
 		if(adurls.size()>0) {
-			int index = playindex % adurls.size();
-			url = adurls.get(index).getPath();
-			AdvertApp.setPlayingAdvert(adurls.get(index));
+			url = findPlayUrl();
+			if(url!=null && !url.isEmpty()) {
+				urlvalid = true;
+				int index = playindex % adurls.size();
+				//url = adurls.get(index).getPath();
+				AdvertApp.setPlayingAdvert(adurls.get(index));
 
-			PlayRecord record = new PlayRecord();
+				PlayRecord record = new PlayRecord();
+			}else{
+				urlvalid = false;
+			}
 
-		}else if(adurls_local.size()>0) {
+		}
+		if(urlvalid == false && adurls_local.size()>0) {
 			int index = playindex % adurls_local.size();
 			url = adurls_local.get(index).getPath();
 			PlayingAdvert playingItem = new PlayingAdvert();
@@ -1083,8 +1098,48 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 		lock.unlock();
 		return url;
 	}
+	private String findPlayUrl(){
+		String url="";
+		int size = adurls.size();
+		for(int i=0;i<size;i++) {
+			int index = playindex % adurls.size();
 
-	private void updateVideoList(String path) {
+			PlayingAdvert playAdvertItem  = adurls.get(index);
+			Log.i(TAG,"play advertitem "+ playAdvertItem.getPath() + "playindex = " +  playindex + "index = " + index + "path = " + playAdvertItem.getPath());
+			Log.i(TAG,"play advertitem   = " +  playAdvertItem.getStartDate() + " " + playAdvertItem.getStartTime()+playAdvertItem.getEndDate() + " " + playAdvertItem.getEndTime());
+			if(playAdvertItem.getPath()!=null && !playAdvertItem.getPath().isEmpty()) {
+				if(playAdvertItem.getStartDate()!=null && !playAdvertItem.getStartDate().isEmpty()) {
+					if (CommonUtil.compareDateState(playAdvertItem.getStartDate() + " " + playAdvertItem.getStartTime(), playAdvertItem.getEndDate() + " " + playAdvertItem.getEndTime())) {
+						url = playAdvertItem.getPath();
+						break;
+					} else if (CommonUtil.compareDateState("2015-01-01 00:00:00", "2016-12-30 23:59:59")) {
+						url = playAdvertItem.getPath();
+						break;
+					} else {
+						playindex++;
+					}
+				}else{
+					url = playAdvertItem.getPath();
+					break;
+				}
+			}else{
+				playindex++;
+			}
+		}
+		return url;
+	}
+
+	private void updatePlayListFilePath(String path){
+		int size = adurls.size();
+		for(int i=0;i<size;i++){
+			PlayingAdvert item = adurls.get(i);
+			if(path.contains(item.getMd5())){
+				item.setPath(path);
+			}
+		}
+	}
+
+	private void updateVideoList() {
 		//playindex=0;
 
 		if(mTerminalAdvertPackageVo!=null ) {
@@ -1096,37 +1151,47 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 			if(advertPositionVo!=null) {
 				dateScheduleVos = advertPositionVo.getDateScheduleVos();
 				//mAdverPosition = advertPositionVo.getadvertPosition();
-				int size = dateScheduleVos.size();
+
 			}
-
-            List<AdvertVo> packageAdverts = dateScheduleVos.get(0).getTimeScheduleVos().get(0).getPackageAdverts();
-            Long adPositionId = dateScheduleVos.get(0).getDateSchedule().getAdvertPositionId();
-            int size = packageAdverts.size();
-            for (int i = 0; i < size; i++) {
-                AdvertVo advertVo = packageAdverts.get(i);
-                List<AdvertFile> fileList = advertVo.getFileList();
-                for (int j = 0; j < fileList.size(); j++) {
-                    AdvertFile advertFile = fileList.get(j);
-                    if (path.contains(advertFile.getFileMd5())) {
-                        PlayingAdvert item = new PlayingAdvert();
-                        item.setPath(path);
-                        item.setMd5(advertFile.getFileMd5());
-                        item.setAdvertid(advertFile.getAdvertid());
-                        item.setAdPositionID(adPositionId);
-                        item.setTemplateid(region.getTemplateid());
-                        adurls.add(item);
-                    }
-                }
-            }
-
-            Gson gson = new Gson();
-            String str = gson.toJson(adurls);
-            Log.i(TAG, "save advertlist = " + str);
-            DevRing.cacheManager().diskCache("advertList").put("playList", str);
+			int dateScheduleSize = dateScheduleVos.size();
+			for(int l=0;l<dateScheduleSize;l++) {
+				DateScheduleVo dateScheduleVo = dateScheduleVos.get(l);
+				List<TimeScheduleVo> timeScheduleVos = dateScheduleVo.getTimeScheduleVos();
+				int timeScheduleSize = timeScheduleVos.size();
+				for (int k = 0; k < timeScheduleSize; k++) {
+					TimeScheduleVo timeScheduleVo = timeScheduleVos.get(k);
+					List<AdvertVo> packageAdverts = timeScheduleVo.getPackageAdverts();
+					Long adPositionId = dateScheduleVo.getDateSchedule().getAdvertPositionId();
+					int size = packageAdverts.size();
+					for (int i = 0; i < size; i++) {
+						AdvertVo advertVo = packageAdverts.get(i);
+						List<AdvertFile> fileList = advertVo.getFileList();
+						for (int j = 0; j < fileList.size(); j++) {
+							AdvertFile advertFile = fileList.get(j);
+								PlayingAdvert item = new PlayingAdvert();
+								item.setPath("");
+								item.setMd5(advertFile.getFileMd5());
+								item.setAdvertid(advertFile.getAdvertid());
+								item.setAdPositionID(adPositionId);
+								item.setTemplateid(region.getTemplateid());
+								item.setStartDate(dateScheduleVo.getDateSchedule().getStartDate());
+								item.setEndDate(dateScheduleVo.getDateSchedule().getEndDate());
+								item.setStartTime(timeScheduleVo.getTimeSchedule().getStartTime()+":00");
+								item.setEndTime(timeScheduleVo.getTimeSchedule().getEndTime()+":00");
+								adurls.add(item);
+						}
+					}
+				}
+			}
         }
 	}
 
 	private void saveAdvertVersion(AdvertPosition advertPosition){
+		Gson gson = new Gson();
+		String str = gson.toJson(adurls);
+		Log.i(TAG, "save advertlist = " + str);
+		DevRing.cacheManager().diskCache("advertList").put("playList", str);
+
 		AdvertVersion.setAdVersion(advertPosition.getId().intValue(),advertPosition.getVersion());
 		ReportSchedueVerParameter info = new ReportSchedueVerParameter();
 		info.setAdPositionID(advertPosition.getId());
@@ -1202,6 +1267,85 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
         am.setExact(AlarmManager.RTC_WAKEUP, cal.getTimeInMillis(), pi);
 	}
 
+	private void ResetPowerOnAlarm(long time){
+		/*
+		Intent intent=new Intent("POWER_ON_ALARM");
+		PendingIntent pi= PendingIntent.getBroadcast(this, 0, intent,0);
+		//设置一个PendingIntent对象，发送广播
+		AlarmManager am=(AlarmManager)getSystemService(ALARM_SERVICE);
+		//获取AlarmManager对象
+		//am.set(AlarmManager.RTC_WAKEUP, cal.getTimeInMillis(), pi);
+		am.cancel(pi);
+		*/
+
+		SimpleDateFormat format=new SimpleDateFormat("HH:mm:ss");
+		String t1=format.format(time);
+
+		int hour = Integer.valueOf(t1.substring(0,2));
+		int minute = Integer.valueOf(t1.substring(3,5));
+		int second = Integer.valueOf(t1.substring(6,8));
+
+		Date date = new Date();
+		Calendar cal = Calendar.getInstance();
+		//cal.setTimeZone(TimeZone.getTimeZone("GTM+8:00"));
+		Log.i(TAG,"Alarm POWER ON time = " + t1 + "hour = " + hour + "minute = " + minute + "second = " + second  + "date = " + date.toString());
+		cal.setTime(date);
+		cal.add(Calendar.DAY_OF_MONTH,1);
+		cal.set(Calendar.HOUR_OF_DAY, hour);
+		cal.set(Calendar.SECOND, second);
+		cal.set(Calendar.MINUTE, minute);
+		cal.set(Calendar.MILLISECOND, 00);
+
+
+
+		Intent intent1=new Intent("POWER_ON_ALARM");
+		PendingIntent pi1= PendingIntent.getBroadcast(this, 0, intent1,0);
+		//设置一个PendingIntent对象，发送广播
+		AlarmManager am1=(AlarmManager)getSystemService(ALARM_SERVICE);
+		//获取AlarmManager对象
+		//am.set(AlarmManager.RTC_WAKEUP, cal.getTimeInMillis(), pi);
+		am1.setExact(AlarmManager.RTC_WAKEUP, cal.getTimeInMillis(), pi1);
+	}
+	private void ResetPowerOffAlarm(long time){
+
+		/*
+		Intent intent=new Intent("POWER_OFF_ALARM");
+		PendingIntent pi= PendingIntent.getBroadcast(this, 0, intent,0);
+		//设置一个PendingIntent对象，发送广播
+		AlarmManager am=(AlarmManager)getSystemService(ALARM_SERVICE);
+		//获取AlarmManager对象
+		//am.set(AlarmManager.RTC_WAKEUP, cal.getTimeInMillis(), pi);
+		am.cancel(pi);
+		*/
+
+
+		SimpleDateFormat format=new SimpleDateFormat("HH:mm:ss");
+		String t1=format.format(time);
+
+		int hour = Integer.valueOf(t1.substring(0,2));
+		int minute = Integer.valueOf(t1.substring(3,5));
+		int second = Integer.valueOf(t1.substring(6,8));
+		Date date = new Date();
+		Calendar cal = Calendar.getInstance();
+		//cal.setTimeZone(TimeZone.getTimeZone("GTM+8:00"));
+		Log.i(TAG,"Alarm POWER OFF time = " + t1 + "hour = " + hour + "minute = " + minute + "second = " + second  + "date = " + date.toString());
+		cal.setTime(date);
+		cal.set(Calendar.HOUR_OF_DAY, hour);
+		cal.set(Calendar.SECOND, second);
+		cal.set(Calendar.MINUTE, minute);
+		cal.set(Calendar.MILLISECOND, 00);
+
+		Intent intent1=new Intent("POWER_OFF_ALARM");
+		PendingIntent pi1= PendingIntent.getBroadcast(this, 0, intent1,0);
+
+
+		//设置一个PendingIntent对象，发送广播
+		AlarmManager am1=(AlarmManager)getSystemService(ALARM_SERVICE);
+		//获取AlarmManager对象
+		//am.set(AlarmManager.RTC_WAKEUP, cal.getTimeInMillis(), pi);
+		am1.setExact(AlarmManager.RTC_WAKEUP, cal.getTimeInMillis(), pi1);
+
+	}
 
     //接收事件总线发来的事件
     @Subscribe(sticky = true, threadMode = ThreadMode.MAIN) //如果使用默认的EventBus则使用此@Subscribe
@@ -1211,12 +1355,15 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 		switch (msg) {
 			case AppEvent.ADVERT_DOWNLOAD_FINISHED_EVENT:
 				Log.i(TAG,"received event data = " + event.getData());
-				updateVideoList((String)event.getData());
+				//updateVideoList((String)event.getData());
+				updatePlayListFilePath((String)event.getData());
 				break;
 			case AppEvent.ADVERT_LIST_UPDATE_EVENT:
+				//Log.i(TAG,"received event data = " + event.getData());
 				mTerminalAdvertPackageVo = (TerminalAdvertPackageVo) event.getData();
 				adurls.clear();
 				playindex = 0;
+				updateVideoList();
 				//Log.i(TAG,"received event data size =  " + dateScheduleVos.size());
 				break;
 			case AppEvent.ADVERT_LIST_DOWNLOAD_FINISHED_EVENT:
@@ -1238,6 +1385,11 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 				DevRing.cacheManager().spCache("PowerStatus").put("status","on");
 				handler.post(runableSetPowerOn);
 				break;
+			case AppEvent.POWER_UPDATE_ALARM_EVENT:
+				PowerOnOffData powerOnOffData = (PowerOnOffData)event.getData();
+				mHandler.removeMessages(SET_POWER_ALARM_CMD);
+				ResetPowerOffAlarm(powerOnOffData.getEndTime());
+				ResetPowerOnAlarm(powerOnOffData.getStartTime());
 			default:
 				break;
 

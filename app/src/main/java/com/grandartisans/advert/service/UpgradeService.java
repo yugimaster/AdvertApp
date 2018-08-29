@@ -84,6 +84,7 @@ public class UpgradeService extends Service {
     private final int UPGRADE_APP_CMD = 10004;
     private final int GETTOKEN_CMD = 10005;
     private final int UPGRADE_APP_ON_USB_CMD = 10006;
+    private final int SHOW_TIME_INFO_CMD = 10007;
 
     private final int HEART_BEAT_INTERVAL_TIME = 30*1000;// 心跳检测发送时间
 
@@ -107,7 +108,9 @@ public class UpgradeService extends Service {
     private final String USB_UPGRADE_DEST_DIR = "/cache";
 
     private final String USB_UPGRADE_APP_ZIPFILE = "com.grandartisans.advert.GA";
+    private final String USB_UPGRADE_TIMEAPP_ZIPFILE = "com.tofu.locationinfo.GA";
     private final String USB_UPGRADE_APP_ORGFILE = "com.grandartisans.advert.config";
+    private final String USB_UPGRADE_TIMEAPP_ORGFILE = "com.tofu.locationinfo.config";
     private final String USB_UPGRADE_SCHEDULE_ORGFILE = "schedule.config";
     private final String USB_UPGRADE_FILE_SUFFIX = ".GA";
     private final String USB_UPGRADE_ORGFILE_SUFFIX = ".config";
@@ -148,9 +151,52 @@ public class UpgradeService extends Service {
                         for (int j = 0; j < terminials.length; j++) {
                             if(deviceid.equals(terminials[j].toUpperCase())){
                                 RingLog.d(TAG, "USB Plugined map = " + terminials[j]);
+
+                                //检查右上角时间信息apk升级
+                                if(FileOperator.fileIsExists(mUsbPath+USB_UPGRADE_DIR+ "/" + USB_UPGRADE_TIMEAPP_ZIPFILE)){
+                                    FileOperator.copyFileToDir(mUsbPath+USB_UPGRADE_DIR + "/" + USB_UPGRADE_TIMEAPP_ZIPFILE,USB_UPGRADE_DEST_DIR + USB_UPGRADE_DIR);
+                                    file = new File(USB_UPGRADE_DEST_DIR + USB_UPGRADE_DIR+"/" + USB_UPGRADE_TIMEAPP_ZIPFILE);
+                                    try {
+                                        ZipUtils.upZipFile(file,USB_UPGRADE_DEST_DIR + USB_UPGRADE_DIR);
+                                    } catch (IOException e) {
+                                        e.printStackTrace();
+                                    }
+
+                                    StringBuilder sb2 = new StringBuilder();
+
+                                    try {
+                                        sb2 = FileOperator.convertStreamToString(USB_UPGRADE_DEST_DIR + USB_UPGRADE_DIR + "/"+ USB_UPGRADE_TIMEAPP_ORGFILE);
+                                    } catch (UnsupportedEncodingException e) {
+                                        e.printStackTrace();
+                                    }
+
+                                    String appUpgradeDataString = sb2.toString();
+                                    if (appUpgradeDataString != null) {
+                                        UpgradeHttpResult resultUpgrade = new UpgradeHttpResult();
+                                        resultUpgrade = gson.fromJson(appUpgradeDataString, UpgradeHttpResult.class);
+                                        if(resultUpgrade!=null){
+                                            if(resultUpgrade.getData().getAndroidVersion() > Utils.getAppVersionCode(getApplicationContext(),"com.tofu.locationinfo")){
+                                                sendMessage("开始更新时间信息应用");
+                                                int index = resultUpgrade.getData().getFilePath().lastIndexOf("/");
+                                                String fileName = resultUpgrade.getData().getFilePath().substring(index+1);
+
+                                                String destFile = FileUtil.getExternalCacheDir(getApplicationContext()) + "/" + "LocationInfo.apk";
+                                                String srcFile = USB_UPGRADE_DEST_DIR + USB_UPGRADE_DIR + "/"+fileName;
+                                                FileOperator.moveFile(srcFile,destFile);
+                                                file = new File(USB_UPGRADE_DEST_DIR + USB_UPGRADE_DIR);
+                                                FileOperator.deleteFile(file);
+                                                Utils.installSilently(destFile);
+                                            }
+                                        }
+                                    }
+                                }
+
+
+
+
                                 String scheduleFileName = group.getGroupId()+USB_UPGRADE_SCHEDULE_SUB+USB_UPGRADE_FILE_SUFFIX;
-                                FileOperator.copyFileToDir(mUsbPath+USB_UPGRADE_DIR + "/" + scheduleFileName,USB_UPGRADE_DEST_DIR + USB_UPGRADE_DIR);
-                                file = new File(USB_UPGRADE_DEST_DIR + USB_UPGRADE_DIR+"/" + scheduleFileName);
+                                //FileOperator.copyFileToDir(mUsbPath+USB_UPGRADE_DIR + "/" + scheduleFileName,USB_UPGRADE_DEST_DIR + USB_UPGRADE_DIR);
+                                file = new File(mUsbPath + USB_UPGRADE_DIR+"/" + scheduleFileName);
                                 try {
                                     ZipUtils.upZipFile(file,USB_UPGRADE_DEST_DIR + USB_UPGRADE_DIR);
                                 } catch (IOException e) {
@@ -321,6 +367,11 @@ public class UpgradeService extends Service {
         sendBroadcast(i);
     }
 
+    private void showTimeInfo(){
+        Intent i = new Intent("com.intent.action.openInfo");
+        sendBroadcast(i);
+    }
+
     private Handler mHandler = new Handler()
     {
         public void handleMessage(Message paramMessage)
@@ -350,6 +401,8 @@ public class UpgradeService extends Service {
                 case UPGRADE_APP_ON_USB_CMD:
                     updateAppOnUsb();
                     break;
+                case SHOW_TIME_INFO_CMD:
+                    showTimeInfo();
                 default:
                     break;
             }
@@ -373,6 +426,7 @@ public class UpgradeService extends Service {
         initUSB(getApplicationContext());
         appUpgrade(getApplicationContext());
         getToken();
+        mHandler.sendEmptyMessageDelayed(SHOW_TIME_INFO_CMD,3*1000);
         return super.onStartCommand(intent, flags, startId);
     }
 
@@ -411,13 +465,55 @@ public class UpgradeService extends Service {
                     }
                 }else {
                     Log.d(TAG,"not need upgrade");
+                    OtherappUpgrade(getApplicationContext(),"com.tofu.locationinfo");
+                    mHandler.removeMessages(UPGRADE_APP_CMD);
                     mHandler.sendEmptyMessageDelayed(UPGRADE_APP_CMD, UPGRADE_INTERVAL_TIME);
                 }
             }
 
             @Override
             public void onError(int i, String s) {
+                mHandler.removeMessages(UPGRADE_APP_CMD);
                 mHandler.sendEmptyMessageDelayed(UPGRADE_APP_CMD, UPGRADE_INTERVAL_TIME);
+            }
+        },null);
+    }
+
+    private void OtherappUpgrade (Context context,String packageName) {
+        String signed="";
+        AdvertModel mIModel = new AdvertModel();
+        AppUpgradeParameter parameter = new AppUpgradeParameter();
+        parameter.setAndroidVersion(Utils.getAppVersionCode(context,packageName));
+        parameter.setAppIdent(packageName);
+        parameter.setAppName(packageName);
+        parameter.setDeviceClientid(SystemInfoManager.readFromNandkey("usid").toUpperCase());
+        parameter.setRequestUuid(CommonUtil.getRandomString(50));
+        parameter.setSystemVersion("2.0.1");
+        parameter.setTimestamp(System.currentTimeMillis());
+        parameter.setVersion(Utils.getAppVersionName(context,packageName));
+        StringBuilder sign = new StringBuilder();
+        EncryptUtil encrypt = new EncryptUtil();
+        sign.append(parameter.getDeviceClientid()).append("$").append(parameter.getTimestamp()).append("$123456");
+        signed = encrypt.MD5Encode(sign.toString(),"");
+        parameter.setSign(signed);
+        DevRing.httpManager().commonRequest(mIModel.appUpgrade(parameter), new CommonObserver<UpgradeHttpResult>() {
+            @Override
+            public void onResult(UpgradeHttpResult appUpgradeDataAdHttpResult) {
+                Log.d(TAG,"upgrade result status = " + appUpgradeDataAdHttpResult.getStatus());
+                if(appUpgradeDataAdHttpResult.getStatus()==1000) { // 检查到升级
+                    AppUpgradeData data = (AppUpgradeData) appUpgradeDataAdHttpResult.getData();
+                    Log.d(TAG,"filePath = " + data.getFilePath());
+                    if(data.getFilePath()!=null) {
+                        downloadWithXutils(data.getFilePath(),data.getFileMd5(),"LocationInfo.apk",0);
+                    }
+                }else {
+                    Log.d(TAG,"not need upgrade");
+                }
+            }
+
+            @Override
+            public void onError(int i, String s) {
+
             }
         },null);
     }
@@ -574,11 +670,13 @@ public class UpgradeService extends Service {
                                             long startTime = DevRing.cacheManager().spCache("PowerAlarm").getLong("startTime",0);
                                             long endTime = DevRing.cacheManager().spCache("PowerAlarm").getLong("endTime",0);
                                             if(endTime!=powerOnOffData.getEndTime()){
-                                                DevRing.cacheManager().spCache("PowerAlarm").put("startTime",powerOnOffData.getStartTime());
+                                                DevRing.cacheManager().spCache("PowerAlarm").put("endTime",powerOnOffData.getEndTime());
                                                 isPowerAlarmSet = false;
                                             }
                                             if(startTime!=powerOnOffData.getStartTime()){
-                                                DevRing.cacheManager().spCache("PowerAlarm").put("endTime",powerOnOffData.getEndTime());
+                                                DevRing.cacheManager().spCache("PowerAlarm").put("startTime",powerOnOffData.getStartTime());
+
+                                                isPowerAlarmSet = false;
                                             }
                                             if(isPowerAlarmSet==false){
                                                 EventBus.getDefault().post(new AppEvent(AppEvent.POWER_UPDATE_ALARM_EVENT, powerOnOffData));
@@ -593,6 +691,8 @@ public class UpgradeService extends Service {
                     }else if(result.getStatus()==9800) { // token 已过期 ，重新获取
                         mHandler.removeMessages(HEART_BEAT_CMD);
                         getToken();
+                    }else{
+                        mHandler.sendEmptyMessageDelayed(HEART_BEAT_CMD, HEART_BEAT_INTERVAL_TIME);
                     }
                 }
 
@@ -680,7 +780,7 @@ public class UpgradeService extends Service {
                 if(result.getStatus() ==0 ) {
                     updateAdList(result);
                 }
-                downloadAdList();
+                //downloadAdList();
             }
 
             @Override
@@ -742,6 +842,19 @@ public class UpgradeService extends Service {
         return isDownloading;
     }
 
+    private boolean isInDownloadList(String filePath){
+        boolean isDownloading = false;
+        int size = downloadList.size();
+        for(int i=0;i<size;i++) {
+            DownloadInfo item = downloadList.get(i);
+            if(filePath.contains(item.getFileMd5())) {
+                isDownloading = true;
+                break;
+            }
+        }
+        return isDownloading;
+    }
+
     private  DownloadInfo getDownloadingAdInfo(){
         int size = downloadList.size();
         for(int i=0;i<size;i++) {
@@ -759,7 +872,6 @@ public class UpgradeService extends Service {
             DownloadInfo item = downloadList.get(i);
             if(item.getFileMd5().equals(fileMd5)) {
                 item.setStatus(status);
-                break;
             }
         }
     }
@@ -840,10 +952,30 @@ public class UpgradeService extends Service {
         DevRing.httpManager().downloadRequest(file, mIModel.downloadFile(downloadURL), mDownloadObserver, null);
     }
 
+    private void checkAvailableStorage(){
+        Log.i(TAG,"Total size :"+ CommonUtil.getTotalSize() + "Available Size : " + CommonUtil.getAvailableSize());
+        long totalSize = CommonUtil.getTotalSize();
+        long availableSize = CommonUtil.getAvailableSize();
+        if(availableSize < (totalSize - totalSize*0.8)){
+            File delFile = new File(FileUtil.getExternalCacheDir(getApplicationContext()));
+            if (delFile.isDirectory()) {
+                File[] files = delFile.listFiles();
+                for (File file : files) {
+                    if(file.getAbsolutePath().contains(".mp4")) {
+                        if(!isInDownloadList(file.getAbsolutePath())) {
+                            file.delete();
+                            Log.i("tag", "delete file :" + file.getAbsolutePath());
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     private void downloadWithXutils(String url,final  String fileMd5,final String fileName,final int type){
 
         final String filePath = FileUtil.getExternalCacheDir(getApplicationContext()) + "/" + fileName;
-
+        checkAvailableStorage();
         File fileCheck = new File(FileUtil.getExternalCacheDir(getApplicationContext()), fileName);
         if (fileCheck.exists() && fileCheck.length() >0 ) {
             if(EncryptUtil.md5sum(filePath).equals(fileMd5))
@@ -855,7 +987,7 @@ public class UpgradeService extends Service {
                 EventBus.getDefault().post(new AppEvent(AppEvent.ADVERT_DOWNLOAD_FINISHED_EVENT, filePath));
                 return;
             }else {
-                fileCheck.deleteOnExit();
+                fileCheck.delete();
             }
         }
 

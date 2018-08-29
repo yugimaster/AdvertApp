@@ -3,6 +3,7 @@ package com.grandartisans.advert.receiver;
 import com.grandartisans.advert.activity.MediaPlayerActivity;
 import com.grandartisans.advert.service.RemoteService;
 import com.grandartisans.advert.service.UpgradeService;
+import com.grandartisans.advert.utils.CommonUtil;
 
 import android.content.BroadcastReceiver;
 import android.content.Context;
@@ -18,10 +19,14 @@ public class AppUpgradeReceiver extends BroadcastReceiver {
 		Log.e(TAG, "==++++++++++== AppUpgradeReceiver action : " + intent.getAction());
         String action = intent.getAction();
 		if ("android.intent.action.PACKAGE_REPLACED".equals(action)) {
-			Intent it=new Intent(context,MediaPlayerActivity.class);
-			it.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-			context.startActivity(it);
-
+			String packageName = intent.getData().getSchemeSpecificPart();
+			if(packageName.equals("com.grandartisans.advert")) {
+				Intent it = new Intent(context, MediaPlayerActivity.class);
+				it.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+				context.startActivity(it);
+			}else if(packageName.equals("com.tofu.locationinfo")){
+                CommonUtil.reboot(context);
+			}
 			//Intent intentService = new Intent(context,RemoteService.class);
 			//context.startService(intentService);
 		}

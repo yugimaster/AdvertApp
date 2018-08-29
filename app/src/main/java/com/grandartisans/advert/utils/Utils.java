@@ -67,6 +67,23 @@ public class Utils {
         return versionName;
     }
 
+    public static String getAppVersionName(Context context,String packageName)
+    {
+        String versionName = "";
+        try {
+            // ---get the package info---
+            PackageManager pm = context.getPackageManager();
+            PackageInfo pi = pm.getPackageInfo(packageName, 0);
+            versionName = pi.versionName;
+            if (versionName == null || versionName.length() <= 0) {
+                return "";
+            }
+        } catch (Exception e) {
+            Log.e("VersionInfo", "Exception", e);
+        }
+        return versionName;
+    }
+
     public static int  getAppVersionCode(Context context)
     {
         int versioncode = 0;
@@ -74,6 +91,20 @@ public class Utils {
             // ---get the package info---
             PackageManager pm = context.getPackageManager();
             PackageInfo pi = pm.getPackageInfo(context.getPackageName(), 0);
+            versioncode = pi.versionCode;
+            Log.e("grandartisans","versionCode = " + pi.versionCode + "versionName = " + pi.versionName + "packagName = " + pi.packageName);
+        } catch (Exception e) {
+            Log.e("VersionInfo", "Exception", e);
+        }
+        return versioncode;
+    }
+    public static int  getAppVersionCode(Context context,String packageName)
+    {
+        int versioncode = 0;
+        try {
+            // ---get the package info---
+            PackageManager pm = context.getPackageManager();
+            PackageInfo pi = pm.getPackageInfo(packageName, 0);
             versioncode = pi.versionCode;
             Log.e("grandartisans","versionCode = " + pi.versionCode + "versionName = " + pi.versionName + "packagName = " + pi.packageName);
         } catch (Exception e) {
