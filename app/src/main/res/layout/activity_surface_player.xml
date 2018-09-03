@@ -1,12 +1,13 @@
-<LinearLayout
+<RelativeLayout
     android:id="@+id/rootframeview"
     android:background="@color/black"
     android:layout_width="fill_parent"
     android:layout_height="fill_parent"
+    android:orientation="horizontal"
     xmlns:android="http://schemas.android.com/apk/res/android">
     <com.grandartisans.advert.view.MySurfaceView
         android:layout_gravity="center"
         android:id="@+id/surface"
         android:layout_width="fill_parent"
         android:layout_height="fill_parent" />
-</LinearLayout>
+</RelativeLayout>

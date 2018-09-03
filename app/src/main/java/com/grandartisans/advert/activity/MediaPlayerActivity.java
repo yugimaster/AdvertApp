@@ -8,6 +8,7 @@ import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Date;
 import java.util.List;
+import java.util.Map;
 import java.util.TimeZone;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -51,22 +52,30 @@ import android.view.WindowManager;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.MediaController;
+import android.widget.RelativeLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 import android.widget.VideoView;
 
+import com.bumptech.glide.Glide;
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 import com.grandartisans.advert.app.AdvertApp;
+import com.grandartisans.advert.common.Common;
+import com.grandartisans.advert.common.ScheduleTimesCache;
 import com.grandartisans.advert.dbutils.PlayRecord;
 import com.grandartisans.advert.dbutils.dbutils;
 import com.grandartisans.advert.model.AdvertModel;
 import com.grandartisans.advert.model.entity.DownloadInfo;
 import com.grandartisans.advert.model.entity.PlayingAdvert;
 import com.grandartisans.advert.model.entity.event.AppEvent;
+import com.grandartisans.advert.model.entity.post.AdvertParameter;
 import com.grandartisans.advert.model.entity.post.EventParameter;
 import com.grandartisans.advert.model.entity.post.ReportEventData;
 import com.grandartisans.advert.model.entity.post.ReportSchedueVerParameter;
+import com.grandartisans.advert.model.entity.post.TokenParameter;
+import com.grandartisans.advert.model.entity.post.UserAgent;
+import com.grandartisans.advert.model.entity.res.AdListHttpResult;
 import com.grandartisans.advert.model.entity.res.AdvertFile;
 import com.grandartisans.advert.model.entity.res.AdvertPosition;
 import com.grandartisans.advert.model.entity.res.AdvertPositionVo;
@@ -77,9 +86,11 @@ import com.grandartisans.advert.model.entity.res.ReportInfoResult;
 import com.grandartisans.advert.model.entity.res.TemplateRegion;
 import com.grandartisans.advert.model.entity.res.TerminalAdvertPackageVo;
 import com.grandartisans.advert.model.entity.res.TimeScheduleVo;
+import com.grandartisans.advert.model.entity.res.TokenHttpResult;
 import com.grandartisans.advert.service.UpgradeService;
 import com.grandartisans.advert.utils.AdvertVersion;
 import com.grandartisans.advert.utils.CommonUtil;
+import com.grandartisans.advert.utils.EncryptUtil;
 import com.grandartisans.advert.utils.FileUtils;
 import com.grandartisans.advert.utils.LogToFile;
 import com.grandartisans.advert.utils.SerialPortUtils;
@@ -91,6 +102,7 @@ import com.grandartisans.advert.view.MySurfaceView;
 import com.ljy.devring.DevRing;
 import com.ljy.devring.http.support.observer.CommonObserver;
 import com.ljy.devring.other.RingLog;
+import com.ljy.devring.util.FileUtil;
 import com.prj.utils.PrjSettingsManager;
 
 import org.greenrobot.eventbus.EventBus;
@@ -105,12 +117,16 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 	private MediaPlayer mMediaPlayer;
 	private MySurfaceView surface;
 	private SurfaceHolder surfaceHolder;
+	private RelativeLayout relativeLayout;
 
 	private TextView messageTV ;
 	private int playindex = 0;
+	private int img_playindex = 0;
 	private List<PlayingAdvert> adurls = new ArrayList<PlayingAdvert>();
 
 	private List<PlayingAdvert> adurls_local = new ArrayList<PlayingAdvert>();
+	private List<PlayingAdvert> adimgs = new ArrayList<PlayingAdvert>();
+	private List<PlayingAdvert> adimgs_local = new ArrayList<PlayingAdvert>();
 
 	//List<DateScheduleVo> dateScheduleVos;
 
@@ -152,9 +168,10 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 	private final int START_REPORT_SCHEDULEVER_CMD = 100013;
 	private final int ON_PAUSE_EVENT_CMD = 100014;
 	private final int SET_POWER_ALARM_CMD = 100015;
+	private final int USE_SCHEDULE_TIMES = 100016;
 
 	private String mMode ="";
-
+	private String mToken = "";
 
 	static final float THRESHOLD = 0.2f; //0.08f;
 	static final int LIFT_STATE_INIT = 0;
@@ -211,6 +228,9 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 					break;
 				case SET_POWER_ALARM_CMD:
 					SetPowerAlarm();
+					break;
+				case USE_SCHEDULE_TIMES:
+					useScheduleTimes(true);
 					break;
 				default:
 					break;
@@ -298,7 +318,7 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 
 		keepScreenWake();
 
-
+		relativeLayout = (RelativeLayout) findViewById(R.id.rootframeview);
 
 		handler = new Handler();
 		mHandler.sendEmptyMessageDelayed(SET_POWER_ALARM_CMD,1000*60*5);
@@ -316,7 +336,7 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 
 		initVideoList();
 
-
+		initImageList();//加载图片列表
 
 		if(mMode.equals("AOSP on p313")) {
 			setDisplay();
@@ -351,11 +371,19 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 	}
 
 	private void initView(){
+		// 判断有无排期模板缓存 有则进行排板 无则使用默认模板
+		TerminalAdvertPackageVo tapvo = getScheduleTimesCache();
 		surface = (MySurfaceView) findViewById(R.id.surface);
-
-		surfaceHolder = surface.getHolder();// SurfaceHolder是SurfaceView的控制接口
-		surfaceHolder.addCallback(this);
-		surfaceHolder.setType(SurfaceHolder.SURFACE_TYPE_PUSH_BUFFERS);
+		if (tapvo == null) {
+			RingLog.d(TAG, "the schedule times is none, let use default view");
+			surfaceHolder = surface.getHolder();// SurfaceHolder是SurfaceView的控制接口
+			surfaceHolder.addCallback(this);
+			surfaceHolder.setType(SurfaceHolder.SURFACE_TYPE_PUSH_BUFFERS);
+		} else {
+			RingLog.d(TAG, "the schedule times is not none, let init it");
+			mTerminalAdvertPackageVo = tapvo;
+			mHandler.sendEmptyMessage(USE_SCHEDULE_TIMES);
+		}
 	}
 	/*
 	 * 初始化播放首段视频的player
@@ -947,6 +975,28 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 
 	}
 
+	private void initImageList() {
+		String json_query = DevRing.cacheManager().diskCache("imageList").getString("playList");
+		Gson gson = new Gson();
+		if (json_query != null) {
+			adimgs = gson.fromJson(json_query, new TypeToken<List<PlayingAdvert>>() {}.getType());
+		} else {
+			RingLog.d(TAG, "diskCache imageList is none");
+		}
+		File path = new File("/system/media/imageList");
+		if (path.exists()) {
+			File[] files = path.listFiles();// 读取文件夹下文件
+			for (int i=0; i<files.length; i++) {
+				PlayingAdvert item = new PlayingAdvert();
+				Log.i(TAG, "interal image file = " + files[i].getAbsolutePath());
+				item.setPath(files[i].getAbsolutePath());
+				adimgs_local.add(item);
+			}
+		} else {
+			RingLog.d(TAG, "local image list does not exist");
+		}
+	}
+
 	private void savePlayRecord() {
 		if(adurls.size()>0) {
 			int index = playindex % adurls.size();
@@ -1098,6 +1148,37 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 		lock.unlock();
 		return url;
 	}
+
+	private String getValidImageUrl() {
+		String url = null;
+		boolean isUrlValid = false;
+		lock.lock();
+		Log.i(TAG, "adimgs size = " + adimgs.size() + "img play index = " + img_playindex);
+		Log.i(TAG, "adimgs_local size = " + adimgs_local.size()
+				+ "img play index" + img_playindex);
+		if (adimgs.size() > 0) {
+			url = findImageUrl();
+			if (url != null && !url.isEmpty()) {
+				isUrlValid = true;
+				int index = img_playindex % adimgs.size();
+				AdvertApp.setPlayingAdvert(adimgs.get(index));
+			} else {
+				isUrlValid = false;
+			}
+		}
+		if (!isUrlValid && adimgs_local.size() > 0) {
+			int index = img_playindex % adimgs_local.size();
+			url = adimgs_local.get(index).getPath();
+			PlayingAdvert playingAdvert = new PlayingAdvert();
+			Long id = Long.valueOf(0);
+			playingAdvert.setAdPositionID(id);
+			playingAdvert.setAdvertid(id);
+			AdvertApp.setPlayingAdvert(playingAdvert);
+		}
+		lock.lock();
+		return url;
+	}
+
 	private String findPlayUrl(){
 		String url="";
 		int size = adurls.size();
@@ -1129,13 +1210,78 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 		return url;
 	}
 
-	private void updatePlayListFilePath(String path){
-		int size = adurls.size();
-		for(int i=0;i<size;i++){
-			PlayingAdvert item = adurls.get(i);
-			if(path.contains(item.getMd5())){
-				item.setPath(path);
+	private String findImageUrl() {
+		String url = "";
+		int size = adimgs.size();
+		for (int i=0; i<size; i++) {
+			int index = img_playindex % adimgs.size();
+			PlayingAdvert playingAdvert = adimgs.get(index);
+			String startDate = playingAdvert.getStartDate() + " " + playingAdvert.getStartTime();
+			String endDate = playingAdvert.getEndDate() + " " + playingAdvert.getEndTime();
+			Log.i(TAG, "play image item " + playingAdvert.getPath() + "img play index = " +
+					img_playindex + "index = " + index + "path = " + playingAdvert.getPath());
+			Log.i(TAG, "play image item = " + startDate + " ~ " + endDate);
+			if (playingAdvert.getPath() != null && !playingAdvert.getPath().isEmpty()) {
+				if (playingAdvert.getStartDate() != null && !playingAdvert.getPath().isEmpty()) {
+					if (CommonUtil.compareDateState(startDate, endDate)) {
+						url = playingAdvert.getPath();
+						break;
+					} else if (CommonUtil.compareDateState("2015-01-01 00:00:00",
+							"2016-12-30 23:59:59")) {
+						url = playingAdvert.getPath();
+						break;
+					} else {
+						img_playindex++;
+					}
+				} else {
+					url = playingAdvert.getPath();
+					break;
+				}
+			} else {
+				img_playindex++;
 			}
+		}
+
+		return url;
+	}
+
+	private void updatePlayListFilePath(String path){
+		// 当广告视频没有更新时则执行广告图片更新
+		if (!IsUpdateAdListFilePath(path))
+			RingLog.d(TAG, "let update image file path in list");
+			updateImgListFilePath(path);
+	}
+
+	private boolean IsUpdateAdListFilePath(String path) {
+		for (int i=0; i<adurls.size(); i++) {
+			PlayingAdvert item = adurls.get(i);
+			if (path.contains(item.getMd5())) {
+				item.setPath(path);
+				return true;
+			}
+		}
+		return false;
+	}
+
+	private void updateImgListFilePath(String path) {
+		for (int i=0; i<adimgs.size(); i++) {
+			PlayingAdvert item = adimgs.get(i);
+			if (path.contains(item.getMd5()))
+				item.setPath(path);
+		}
+	}
+
+	private void updatePlayList() {
+		adurls.clear();
+		adimgs.clear();
+		playindex = 0;
+		img_playindex = 0;
+
+		if (mTerminalAdvertPackageVo != null) {
+			// 更新排期模板缓存
+			ScheduleTimesCache.update(mTerminalAdvertPackageVo);
+
+			useScheduleTimes(false);
 		}
 	}
 
@@ -1188,9 +1334,12 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 
 	private void saveAdvertVersion(AdvertPosition advertPosition){
 		Gson gson = new Gson();
-		String str = gson.toJson(adurls);
-		Log.i(TAG, "save advertlist = " + str);
-		DevRing.cacheManager().diskCache("advertList").put("playList", str);
+		String str_adurls = gson.toJson(adurls);
+		Log.i(TAG, "save advertlist = " + str_adurls);
+		String str_adimgs = gson.toJson(adimgs);
+		Log.i(TAG, "save imagelist = " + str_adimgs);
+		DevRing.cacheManager().diskCache("advertList").put("playList", str_adurls);
+		DevRing.cacheManager().diskCache("imageList").put("playList", str_adimgs);
 
 		AdvertVersion.setAdVersion(advertPosition.getId().intValue(),advertPosition.getVersion());
 		ReportSchedueVerParameter info = new ReportSchedueVerParameter();
@@ -1361,9 +1510,8 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 			case AppEvent.ADVERT_LIST_UPDATE_EVENT:
 				//Log.i(TAG,"received event data = " + event.getData());
 				mTerminalAdvertPackageVo = (TerminalAdvertPackageVo) event.getData();
-				adurls.clear();
-				playindex = 0;
-				updateVideoList();
+                // 更新广告视频图片列表
+                updatePlayList();
 				//Log.i(TAG,"received event data size =  " + dateScheduleVos.size());
 				break;
 			case AppEvent.ADVERT_LIST_DOWNLOAD_FINISHED_EVENT:
@@ -1565,5 +1713,130 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 			default:
 				break;
 		}
+	}
+
+	private void useScheduleTimes(Boolean IsSetLayout) {
+		RingLog.i("Use schedule times");
+
+		List<TemplateRegion> regionList = mTerminalAdvertPackageVo.getTemplate().getRegionList();
+		Map<String, Long> relationMap = mTerminalAdvertPackageVo.getRelationMap();
+		Map<Long, AdvertPositionVo> adPosMap = mTerminalAdvertPackageVo.getAdvertPositionMap();
+		for (int i=0; i<regionList.size(); i++) {
+			TemplateRegion region = regionList.get(i);
+			String regLocation = region.getLocation();
+			String[] regLocations = regLocation.split(",");
+			int regWidth = region.getWidth();
+			int regHeight = region.getHeight();
+			int marginLeft = Integer.valueOf(regLocations[0]);
+			int marginTop = Integer.valueOf(regLocations[1]);
+			Long adPosId = relationMap.get(region.getIdent());
+			AdvertPositionVo adPosVo = adPosMap.get(adPosId);
+			if (adPosVo != null) {
+				RingLog.i("Advert position vo is not null");
+				List<DateScheduleVo> dateScheduleVos = adPosVo.getDateScheduleVos();
+				for (int k=0; k<dateScheduleVos.size(); k++) {
+					DateScheduleVo dateScheduleVo = dateScheduleVos.get(k);
+					List<TimeScheduleVo> timeScheduleVos = dateScheduleVo.getTimeScheduleVos();
+					for (int j=0; j<timeScheduleVos.size(); j++) {
+						TimeScheduleVo timeScheduleVo = timeScheduleVos.get(j);
+						List<AdvertVo> advertVos = timeScheduleVo.getPackageAdverts();
+						for (int l=0; l<advertVos.size(); l++) {
+							AdvertVo advertVo = advertVos.get(l);
+							List<AdvertFile> advertFiles = advertVo.getFileList();
+							Long vType = advertVo.getAdvert().getVtype();
+							for (int m=0; m<advertFiles.size(); m++) {
+								AdvertFile advertFile = advertFiles.get(m);
+								if (IsSetLayout) {
+									set_view_layout(vType, regWidth, regHeight, marginLeft,
+											marginTop, advertFile);
+								}
+								add_playing_advert(advertFile, adPosId, region, dateScheduleVo,
+										timeScheduleVo, vType);
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	private void set_view_layout(long viewType, int width, int height, int left, int top, AdvertFile advertFile) {
+		String filePath = advertFile.getFilePath();
+		RelativeLayout.LayoutParams layoutParams = new RelativeLayout.LayoutParams(width, height);
+		layoutParams.setMargins(left, top, 0, 0);
+		if (viewType == 1) {
+			// 图片控件
+			RingLog.d(TAG, "set image view");
+			String imageUrl = getValidImageUrl();
+			ImageView imageView = new ImageView(this);
+			imageView.setLayoutParams(layoutParams);
+			relativeLayout.addView(imageView);
+			if (imageUrl == null || imageUrl.isEmpty()) {
+				Glide.with(this).load(filePath).into(imageView);
+			} else {
+				if (adimgs.size() > 0) {
+					Glide.with(this).load(imageUrl).into(imageView);
+				} else if (adimgs_local.size() > 0) {
+					File file = new File(imageUrl);
+					Glide.with(this).load(file).into(imageView);
+				}
+			}
+		} else if (viewType == 2) {
+			// 视频控件
+			RingLog.d(TAG, "set surface view");
+			surface.setLayoutParams(layoutParams);
+			surfaceHolder = surface.getHolder();// SurfaceHolder是SurfaceView的控制接口
+			surfaceHolder.addCallback(this);
+			surfaceHolder.setType(SurfaceHolder.SURFACE_TYPE_PUSH_BUFFERS);
+		}
+	}
+
+	private void add_playing_advert(AdvertFile advertFile, Long adPositionId, TemplateRegion region,
+									DateScheduleVo dateScheduleVo, TimeScheduleVo timeScheduleVo,
+									Long viewType) {
+		PlayingAdvert item = new PlayingAdvert();
+		item.setPath("");
+		item.setMd5(advertFile.getFileMd5());
+		item.setAdvertid(advertFile.getAdvertid());
+		item.setAdPositionID(adPositionId);
+		item.setTemplateid(region.getTemplateid());
+		item.setStartDate(dateScheduleVo.getDateSchedule().getStartDate());
+		item.setEndDate(dateScheduleVo.getDateSchedule().getEndDate());
+		item.setStartTime(timeScheduleVo.getTimeSchedule().getStartTime() + ":00");
+		item.setEndTime(timeScheduleVo.getTimeSchedule().getEndTime() + ":00");
+		if (viewType == 2)
+			adurls.add(item);
+		else
+			adimgs.add(item);
+	}
+
+	private void getAdListHttpResult(String token) {
+		AdvertModel mIModel = new AdvertModel();
+		AdvertParameter parameter = Common.getAdvertParams(token);
+		DevRing.httpManager().commonRequest(mIModel.getAdertList(parameter), new CommonObserver<AdListHttpResult>() {
+			@Override
+			public void onResult(AdListHttpResult result) {
+				if(result.getStatus() ==0 ) {
+					updateScheduleTimesCache(result);
+				}
+			}
+
+			@Override
+			public void onError(int i, String s) {
+				RingLog.d("getAdList onError i = " + i + "message = " + s );
+				updateScheduleTimesCache(null);
+			}
+
+		},null);
+	}
+
+	private void updateScheduleTimesCache(AdListHttpResult result) {
+		if (result == null)
+			return;
+		ScheduleTimesCache.update(result.getData());
+	}
+
+	private TerminalAdvertPackageVo getScheduleTimesCache() {
+		return ScheduleTimesCache.get();
 	}
 }
