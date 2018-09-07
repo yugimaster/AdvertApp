@@ -22,6 +22,9 @@ public class BootReceiver extends BroadcastReceiver {
 		if ("android.intent.action.BOOT_COMPLETED".equals(action)) {
 			//Intent intentService = new Intent(context,RemoteService.class);
 			//context.startService(intentService);
+
+			Intent intentService = new Intent(context,UpgradeService.class);
+			context.startService(intentService);
 		}else if(action.equals("android.net.conn.CONNECTIVITY_CHANGE")){
 			/*
 			NetworkInfo networkInfo = intent.getParcelableExtra(ConnectivityManager.EXTRA_NETWORK_INFO);

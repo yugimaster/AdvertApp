@@ -24,11 +24,14 @@ public class AppUpgradeReceiver extends BroadcastReceiver {
 				Intent it = new Intent(context, MediaPlayerActivity.class);
 				it.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
 				context.startActivity(it);
+
+				Intent intentService = new Intent(context,UpgradeService.class);
+				context.startService(intentService);
+
 			}else if(packageName.equals("com.tofu.locationinfo")){
                 CommonUtil.reboot(context);
 			}
-			//Intent intentService = new Intent(context,RemoteService.class);
-			//context.startService(intentService);
+
 		}
 	}
 }

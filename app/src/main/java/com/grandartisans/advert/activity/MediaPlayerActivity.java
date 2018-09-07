@@ -152,6 +152,7 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 	private final int START_REPORT_SCHEDULEVER_CMD = 100013;
 	private final int ON_PAUSE_EVENT_CMD = 100014;
 	private final int SET_POWER_ALARM_CMD = 100015;
+	private final int START_OPEN_SERIALPORT = 100016;
 
 	private String mMode ="";
 
@@ -200,6 +201,9 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 				case START_PLAYER_CMD:
 					initPlayer();
 					break;
+				case START_OPEN_SERIALPORT:
+					openSerialPort();
+					break;
 				case START_REPORT_EVENT_CMD:
 					ReportPlayRecordAll();
 					break;
@@ -247,9 +251,32 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
     //开线程更新UI
 	private void SetPowerAlarm(){
 			//initPowerOffAlarm(22,00,00);// 设置定时关机提醒
-			initPowerOffAlarm(22,00,00);// 设置定时关机提醒
+		long startTime = DevRing.cacheManager().spCache("PowerAlarm").getLong("startTime",0);
+		long endTime = DevRing.cacheManager().spCache("PowerAlarm").getLong("endTime",0);
+		int startHour = 07;
+		int startMinute = 00;
+		int startSecond = 00;
+		int endHour = 21;
+		int endMinute = 30;
+		int endSecond = 00;
+		if(startTime!=0) {
+			SimpleDateFormat format = new SimpleDateFormat("HH:mm:ss");
+			String t1 = format.format(startTime);
+			startHour = Integer.valueOf(t1.substring(0, 2));
+			startMinute = Integer.valueOf(t1.substring(3, 5));
+			startSecond = Integer.valueOf(t1.substring(6, 8));
+		}
+		if(endTime!=0){
+			SimpleDateFormat format = new SimpleDateFormat("HH:mm:ss");
+			String t1 = format.format(endTime);
+			endHour = Integer.valueOf(t1.substring(0, 2));
+			endMinute = Integer.valueOf(t1.substring(3, 5));
+			endSecond = Integer.valueOf(t1.substring(6, 8));
+		}
 
-			initPowerOnAlarm(07,00,00);//设置定时开机提醒
+		initPowerOffAlarm(endHour,endMinute,endSecond);// 设置定时关机提醒
+
+		initPowerOnAlarm(startHour,startMinute,startSecond);//设置定时开机提醒
 
 	}
 
@@ -295,13 +322,13 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 		getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN, WindowManager.LayoutParams.FLAG_FULLSCREEN);
 		setContentView(R.layout.activity_surface_player);
 		Log.i(TAG,"onCreate");
-
+		setCurrentTime();
 		keepScreenWake();
 
 
 
 		handler = new Handler();
-		mHandler.sendEmptyMessageDelayed(SET_POWER_ALARM_CMD,1000*60*5);
+		mHandler.sendEmptyMessageDelayed(SET_POWER_ALARM_CMD,1000*60*10);
 		prjmanager = PrjSettingsManager.getInstance(this);
 
 		mMode = CommonUtil.getModel();
@@ -323,9 +350,10 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 		}
 
 
-
+		/*
 		Intent intentService = new Intent(MediaPlayerActivity.this,UpgradeService.class);
 		startService(intentService);
+		*/
 
 		/*
 		PicoClient.OnEventListener mPicoOnEventListener = new PicoClient.OnEventListener() {
@@ -482,7 +510,12 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 			handler.post(runableSetPowerOff);
 		}
         onResumeEvent();
-		mHandler.sendEmptyMessageDelayed(START_PLAYER_CMD,1*1000);
+		mHandler.sendEmptyMessageDelayed(START_PLAYER_CMD,3*1000);
+		if(mMode.equals("GAPEDS4A4")) {
+			mHandler.sendEmptyMessageDelayed(START_OPEN_SERIALPORT, 5 * 1000);
+		}else{
+			openSerialPort();
+		}
 		Log.i(TAG,"surfaceCreated");
 	}
 
@@ -514,7 +547,12 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 
 	}
 	private void onPauseEvent(){
-		if(mMediaPlayer!=null && mMediaPlayer.isPlaying()) {
+		Log.i(TAG,"onPauseEvent");
+		if (serialPortUtils != null) {
+			serialPortUtils.closeSerialPort();
+		}
+		if(mMediaPlayer!=null) {
+			Log.i(TAG,"Stop mMediaPlayer");
 			mMediaPlayer.stop();
 		}
 		/*
@@ -522,9 +560,7 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 			mSensorManager.unregisterListener(this);
 		}
 		*/
-		if (serialPortUtils != null) {
-			serialPortUtils.closeSerialPort();
-		}
+		setScreen(1);
 	}
 	@Override
 	protected void onResume() {
@@ -533,9 +569,14 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 
 
 	}
-	private void onResumeEvent(){
+	private void openSerialPort(){
+		if (serialPortUtils != null) {
+			if (serialPortUtils.openSerialPort("/dev/" + CommonUtil.getTFMiniDevice()) == null){
 
-        if (serialPortUtils != null) serialPortUtils.openSerialPort("/dev/" + CommonUtil.getTFMiniDevice());
+			}
+		}
+	}
+	private void onResumeEvent(){
 
         if(!mMode.equals("AOSP on p313")) {
             threshold_distance = Integer.valueOf(prjmanager.getDistance());
@@ -582,6 +623,7 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 				}
 			}
         }else if(keyCode == KeyEvent.KEYCODE_MENU) {
+
 			startSysSetting(MediaPlayerActivity.this);
 		}else if(keyCode == KeyEvent.KEYCODE_BACK || keyCode == KeyEvent.KEYCODE_BACKSLASH){
 			return true;
@@ -817,23 +859,23 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 			public void onDataReceive(byte[] buffer, int size) {
 				//Log.i(TAG, "进入数据监听事件中。。。" + new String(buffer));
 				dealWithData(buffer,size);
+				if(serialPortUtils.serialPortStatus) {
+					//handler.post(ReadThread);
+					if (lastdistance != distance) {
+						handler.post(runnable);
+						lastdistance = distance;
+					}
 
-				//handler.post(ReadThread);
-				if(lastdistance !=distance) {
-					handler.post(runnable);
-					lastdistance = distance;
+					if (mLiftState != LIFT_STATE_STOP && mLiftState != LIFT_STATE_PRE_STOP && mLiftState != LIFT_STATE_INIT) {
+						handler.post(runnable);
+					}
 				}
-
-				if(mLiftState != LIFT_STATE_STOP && mLiftState != LIFT_STATE_PRE_STOP && mLiftState != LIFT_STATE_INIT){
-					handler.post(runnable);
-				}
-
 			}
 
             Runnable runnable = new Runnable() {
                 @Override
                 public void run() {
-                    if(!isPowerOff) {
+                    if(!isPowerOff && serialPortUtils.serialPortStatus) {
 						//Log.i(TAG, "threshold_distance= " + threshold_distance + "distance = " + distance );
                         if (distanceSetDialog != null && distanceSetDialog.isShowing()) {
                             String message = String.format(getResources().getString(R.string.distmessage), strength, distance);
@@ -846,6 +888,9 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 									if(getScreenStatus()!=0) {
 										Log.i(TAG, "threshold_distance= " + threshold_distance + "distance = " + distance + "setscreen off");
                                         //LogToFile.i(TAG,"threshold_distance= " + threshold_distance + "distance = " + distance + "setscreen off");
+										if(mLiftState!=LIFT_STATE_INIT) {
+											setLiftState(LIFT_STATE_STOP);
+										}
 										setScreen(0);
 										if (mMediaPlayer != null && mMediaPlayer.isPlaying()) {
 											mMediaPlayer.pause();
@@ -877,11 +922,13 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 	private void dealWithData(byte[] buffer, int size)
 	{
 		if(size!=9) {
-			//Log.i(TAG,"receiv data error ,size= "+ size + " is not 9 bytes");
+			Log.i(TAG,"receiv data error ,size= "+ size + " is not 9 bytes");
+			distance = 0;
 			return ;
 		}
 		if(buffer[0] != 0x59 || buffer[1] !=0x59) {
 			Log.i(TAG,"receiv data error ,head data0 = "+ buffer[0] +"data1 = "+buffer[1]);
+			distance = 0;
 			return ;
 		}
 		int low = buffer[2]&0xff;
@@ -1206,6 +1253,7 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 
 	private void setScreen(int enable){
         screenStatus = enable;
+		Log.i(TAG,"setScreen enable :" + enable);
 		prjmanager.setScreen(enable);
 	}
 
@@ -1346,6 +1394,22 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 		am1.setExact(AlarmManager.RTC_WAKEUP, cal.getTimeInMillis(), pi1);
 
 	}
+	/*设置当前时间*/
+	private void setCurrentTime(){
+		if(CommonUtil.compareDateState("2015-01-01 00:00:00","2016-01-01 23:59:00")){
+			long when = DevRing.cacheManager().spCache("SysTime").getLong("timeInMillis",0);
+			if(when!=0){
+					when +=  30*1000;
+					if(when / 1000 < Integer.MAX_VALUE){
+						((AlarmManager)getSystemService(Context.ALARM_SERVICE)).setTime(when);
+					}
+			}
+		}
+	}
+	/*保存当前时间*/
+	private void saveCurrentTime(){
+		DevRing.cacheManager().spCache("SysTime").put("timeInMillis",System.currentTimeMillis());
+	}
 
     //接收事件总线发来的事件
     @Subscribe(sticky = true, threadMode = ThreadMode.MAIN) //如果使用默认的EventBus则使用此@Subscribe
@@ -1374,6 +1438,7 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 					handler.post(runableSetPowerOff);
 
 				}else if("POWER_ON_ALARM".equals(event.getData())){
+					saveCurrentTime();
 					CommonUtil.reboot(MediaPlayerActivity.this);
 				}
 				break;

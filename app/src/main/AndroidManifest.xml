@@ -96,6 +96,11 @@
             android:name=".service.RemoteService"
             android:enabled="true"
             android:exported="true" />
+        <provider
+            android:name=".provider.UsbActivateProvider"
+            android:authorities="com.grandartisans.advert.provider.UsbActivateProvider"
+            android:exported="true" />
+
     </application>
 
 </manifest>

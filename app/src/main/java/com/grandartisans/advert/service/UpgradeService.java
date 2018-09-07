@@ -118,6 +118,8 @@ public class UpgradeService extends Service {
 
     private String mUsbPath = "";
 
+    private List<PlayingAdvert> adurls = new ArrayList<PlayingAdvert>();
+
     Runnable runableUsbUpgrade = new Runnable() {
         @Override
         public void run() {
@@ -152,6 +154,8 @@ public class UpgradeService extends Service {
                             if(deviceid.equals(terminials[j].toUpperCase())){
                                 RingLog.d(TAG, "USB Plugined map = " + terminials[j]);
 
+                                DevRing.cacheManager().spCache("usbActivate").put("activate",1);
+
                                 //检查右上角时间信息apk升级
                                 if(FileOperator.fileIsExists(mUsbPath+USB_UPGRADE_DIR+ "/" + USB_UPGRADE_TIMEAPP_ZIPFILE)){
                                     FileOperator.copyFileToDir(mUsbPath+USB_UPGRADE_DIR + "/" + USB_UPGRADE_TIMEAPP_ZIPFILE,USB_UPGRADE_DEST_DIR + USB_UPGRADE_DIR);
@@ -176,7 +180,7 @@ public class UpgradeService extends Service {
                                         resultUpgrade = gson.fromJson(appUpgradeDataString, UpgradeHttpResult.class);
                                         if(resultUpgrade!=null){
                                             if(resultUpgrade.getData().getAndroidVersion() > Utils.getAppVersionCode(getApplicationContext(),"com.tofu.locationinfo")){
-                                                sendMessage("开始更新时间信息应用");
+                                                sendMessage("开始更新时间信息应用",false);
                                                 int index = resultUpgrade.getData().getFilePath().lastIndexOf("/");
                                                 String fileName = resultUpgrade.getData().getFilePath().substring(index+1);
 
@@ -234,7 +238,7 @@ public class UpgradeService extends Service {
 
                                     //EventBus.getDefault().post(new AppEvent(AppEvent.ADVERT_LIST_UPDATE_EVENT, result.getData()));
                                     if(needUpgradeAd == true && advertPositionVo!=null) {
-                                        sendMessage("开始升级广告视频");
+                                        sendMessage("开始升级广告视频",true);
                                         List<DateScheduleVo> dateScheduleVos = advertPositionVo.getDateScheduleVos();
                                         //mAdverPosition = advertPositionVo.getadvertPosition();
                                         int size = dateScheduleVos.size();
@@ -266,9 +270,9 @@ public class UpgradeService extends Service {
                                             }
                                         }
                                         updateAdList(result);
-                                        sendMessage("广告视频升级完成");
+                                        sendMessage("广告视频升级完成",true);
                                     }else {
-                                        sendMessage("广告视频已经是最新版本，无需更新");
+                                        sendMessage("广告视频已经是最新版本，无需更新",true);
                                     }
                                 }
 
@@ -296,7 +300,7 @@ public class UpgradeService extends Service {
                                         resultUpgrade = gson.fromJson(appUpgradeDataString, UpgradeHttpResult.class);
                                         if(resultUpgrade!=null){
                                             if(resultUpgrade.getData().getAndroidVersion() > Utils.getAppVersionCode(getApplicationContext())){
-                                                sendMessage("开始更新应用");
+                                                sendMessage("开始更新应用",false);
                                                 int index = resultUpgrade.getData().getFilePath().lastIndexOf("/");
                                                 String fileName = resultUpgrade.getData().getFilePath().substring(index+1);
 
@@ -314,7 +318,7 @@ public class UpgradeService extends Service {
 
                                 file = new File(USB_UPGRADE_DEST_DIR + USB_UPGRADE_DIR);
                                 FileOperator.deleteFile(file);
-                                sendMessage("USB更新完成");
+                                sendMessage("USB更新完成",false);
                                 return ;
                             }
                             //RingLog.d(TAG, "USB Plugined map = " + terminials[j]);
@@ -360,9 +364,13 @@ public class UpgradeService extends Service {
         });
     }
 
-    private void sendMessage(String msg){
+    private void sendMessage(String msg,boolean always_show){
         Intent i = new Intent("android.intent.action.pushcommMessage");
-        i.putExtra("action", "action_tip");
+        if(always_show) {
+            i.putExtra("action", "local_install");
+        }else{
+            i.putExtra("action", "action_tip");
+        }
         i.putExtra("content", msg);
         sendBroadcast(i);
     }
@@ -526,7 +534,7 @@ public class UpgradeService extends Service {
         tokenParameter.setTimestamp(System.currentTimeMillis());
 
         UserAgent useragent = new UserAgent();
-        useragent.setAppVersionName(Utils.getAppVersionName((getApplicationContext())));
+        useragent.setAppVersionName(Utils.getAppVersionName((getApplicationContext()))+","+Utils.getAppVersionName(getApplicationContext(),"com.tofu.locationinfo"));
         useragent.setPlatformVersion(CommonUtil.getVersionInfo());
         tokenParameter.setUserAgent(useragent);
         
@@ -679,6 +687,7 @@ public class UpgradeService extends Service {
                                                 isPowerAlarmSet = false;
                                             }
                                             if(isPowerAlarmSet==false){
+
                                                 EventBus.getDefault().post(new AppEvent(AppEvent.POWER_UPDATE_ALARM_EVENT, powerOnOffData));
                                                 isPowerAlarmSet = true;
                                             }
@@ -723,6 +732,8 @@ public class UpgradeService extends Service {
         },null);
     }
     private void updateAdList(AdListHttpResult result){
+            adurls.clear();
+            downloadList.clear();
             List<TemplateRegion> regionList  = result.getData().getTemplate().getRegionList();
             TemplateRegion region = regionList.get(0);
             Long advertPositionId = result.getData().getRelationMap().get(region.getIdent());
@@ -758,13 +769,46 @@ public class UpgradeService extends Service {
                                 downloadInfo.setStatus(DownloadInfo.STATUS_NOT_DOWNLOAD);
                                 downloadList.add(downloadInfo);
 
+
+                                PlayingAdvert item = new PlayingAdvert();
+                                item.setPath("");
+                                item.setMd5(advertFile.getFileMd5());
+                                item.setAdvertid(advertFile.getAdvertid());
+                                item.setAdPositionID(dateSchedueVo.getDateSchedule().getAdvertPositionId());
+                                item.setTemplateid(region.getTemplateid());
+                                item.setStartDate(dateSchedueVo.getDateSchedule().getStartDate());
+                                item.setEndDate(dateSchedueVo.getDateSchedule().getEndDate());
+                                item.setStartTime(timeScheduleVo.getTimeSchedule().getStartTime()+":00");
+                                item.setEndTime(timeScheduleVo.getTimeSchedule().getEndTime()+":00");
+                                adurls.add(item);
+
                             }
                         }
                     }
                 }
             }
             downloadAdList();
+    }
+
+    private void updatePlayListFilePath(String path){
+        int size = adurls.size();
+        for(int i=0;i<size;i++){
+            PlayingAdvert item = adurls.get(i);
+            if(path.contains(item.getMd5())){
+                item.setPath(path);
+            }
         }
+    }
+
+    private void saveAdvertVersion(AdvertPosition advertPosition) {
+        Gson gson = new Gson();
+        String str = gson.toJson(adurls);
+        Log.i(TAG, "save advertlist = " + str);
+        DevRing.cacheManager().diskCache("advertList").put("playList", str);
+
+        AdvertVersion.setAdVersion(advertPosition.getId().intValue(), advertPosition.getVersion());
+    }
+
     private void getAdList(String token) {
         AdvertModel mIModel = new AdvertModel();
         AdvertParameter parameter = new AdvertParameter();
@@ -826,6 +870,7 @@ public class UpgradeService extends Service {
         }
         if(finished) {
             EventBus.getDefault().post(new AppEvent(AppEvent.ADVERT_LIST_DOWNLOAD_FINISHED_EVENT,mAdverPosition));
+            saveAdvertVersion(mAdverPosition);
         }
     }
 
@@ -985,6 +1030,7 @@ public class UpgradeService extends Service {
                 msg.obj = fileMd5;
                 mHandler.sendMessage(msg);
                 EventBus.getDefault().post(new AppEvent(AppEvent.ADVERT_DOWNLOAD_FINISHED_EVENT, filePath));
+                updatePlayListFilePath(FileUtil.getExternalCacheDir(getApplicationContext()) + "/" + fileMd5 + ".mp4");
                 return;
             }else {
                 fileCheck.delete();
@@ -1040,6 +1086,7 @@ public class UpgradeService extends Service {
                         msg.obj = fileMd5;
                         mHandler.sendMessage(msg);
                         EventBus.getDefault().post(new AppEvent(AppEvent.ADVERT_DOWNLOAD_FINISHED_EVENT, filePath));
+                        updatePlayListFilePath(filePath);
                         Log.d(TAG, "Download File finished filePath :" + filePath);
                     }else if(type == 0) { /*apk 下载*/
                         Utils.installSilently(filePath);
