@@ -2,6 +2,7 @@ package com.grandartisans.advert.activity;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.InterruptedIOException;
 import java.text.MessageFormat;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -10,6 +11,8 @@ import java.util.Date;
 import java.util.List;
 import java.util.Map;
 import java.util.TimeZone;
+import java.util.Timer;
+import java.util.TimerTask;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -1758,10 +1761,14 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 				}
 			}
 		}
+		if (IsSetLayout)
+			switchImage();
 	}
 
 	private void set_view_layout(long viewType, int width, int height, int left, int top, AdvertFile advertFile) {
 		String filePath = advertFile.getFilePath();
+		float scale = (float) 1080 / 768;
+		height = (int) (height * scale);
 		RelativeLayout.LayoutParams layoutParams = new RelativeLayout.LayoutParams(width, height);
 		layoutParams.setMargins(left, top, 0, 0);
 		if (viewType == 1) {
@@ -1806,8 +1813,10 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 		item.setEndTime(timeScheduleVo.getTimeSchedule().getEndTime() + ":00");
 		if (viewType == 2)
 			adurls.add(item);
-		else
+		else {
+			item.setUri(advertFile.getFilePath());
 			adimgs.add(item);
+		}
 	}
 
 	private void getAdListHttpResult(String token) {
@@ -1839,4 +1848,49 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 	private TerminalAdvertPackageVo getScheduleTimesCache() {
 		return ScheduleTimesCache.get();
 	}
+
+	private void switchImage() {
+		try {
+			Thread.sleep(5000);
+		} catch (InterruptedException e) {
+			e.printStackTrace();
+		}
+		new Timer().schedule(new TimerTask() {
+			@Override
+			public void run() {
+				handlerImage.sendEmptyMessage(1);
+			}
+		}, 0, 10000);
+	}
+
+	Handler handlerImage = new Handler() {
+		public void handleMessage(Message msg) {
+			switch (msg.what) {
+				case 1:
+					img_playindex++;
+					System.out.println("image play index is: " + img_playindex);
+					if (img_playindex > adimgs.size() - 1) {
+						img_playindex = adimgs.size() - 1;
+					}
+					int childCount = relativeLayout.getChildCount();
+					for (int i=0; i<childCount; i++) {
+						if (relativeLayout.getChildAt(i) instanceof ImageView) {
+							ImageView imageView = (ImageView) relativeLayout.getChildAt(i);
+							String filePath = adimgs.get(img_playindex).getPath();
+							if (filePath != null && !filePath.isEmpty()) {
+								File file = new File(filePath);
+								Glide.with(getApplicationContext()).load(file).into(imageView);
+							} else {
+								Glide.with(getApplicationContext())
+										.load(adimgs.get(img_playindex).getUri())
+										.into(imageView);
+							}
+						}
+					}
+					if (img_playindex == adimgs.size() - 1)
+						img_playindex = 0;
+					break;
+			}
+		}
+	};
 }
