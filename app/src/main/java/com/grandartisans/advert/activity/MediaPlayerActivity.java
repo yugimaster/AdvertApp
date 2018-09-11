@@ -109,6 +109,7 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 	private TextView messageTV ;
 	private int playindex = 0;
 	private List<PlayingAdvert> adurls = new ArrayList<PlayingAdvert>();
+	private List<PlayingAdvert> downloading_ads = new ArrayList<PlayingAdvert>();
 
 	private List<PlayingAdvert> adurls_local = new ArrayList<PlayingAdvert>();
 
@@ -1177,9 +1178,9 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 	}
 
 	private void updatePlayListFilePath(String path){
-		int size = adurls.size();
+		int size = downloading_ads.size();
 		for(int i=0;i<size;i++){
-			PlayingAdvert item = adurls.get(i);
+			PlayingAdvert item = downloading_ads.get(i);
 			if(path.contains(item.getMd5())){
 				item.setPath(path);
 			}
@@ -1225,7 +1226,7 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 								item.setEndDate(dateScheduleVo.getDateSchedule().getEndDate());
 								item.setStartTime(timeScheduleVo.getTimeSchedule().getStartTime()+":00");
 								item.setEndTime(timeScheduleVo.getTimeSchedule().getEndTime()+":00");
-								adurls.add(item);
+								downloading_ads.add(item);
 						}
 					}
 				}
@@ -1234,6 +1235,13 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 	}
 
 	private void saveAdvertVersion(AdvertPosition advertPosition){
+		adurls.clear();
+		playindex = 0;
+		for(int i=0;i<downloading_ads.size();i++){
+			adurls.add(downloading_ads.get(i));
+		}
+
+
 		Gson gson = new Gson();
 		String str = gson.toJson(adurls);
 		Log.i(TAG, "save advertlist = " + str);
@@ -1425,8 +1433,8 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 			case AppEvent.ADVERT_LIST_UPDATE_EVENT:
 				//Log.i(TAG,"received event data = " + event.getData());
 				mTerminalAdvertPackageVo = (TerminalAdvertPackageVo) event.getData();
-				adurls.clear();
-				playindex = 0;
+				//adurls.clear();
+				//playindex = 0;
 				updateVideoList();
 				//Log.i(TAG,"received event data size =  " + dateScheduleVos.size());
 				break;
