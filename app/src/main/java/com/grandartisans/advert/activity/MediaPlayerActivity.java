@@ -1767,8 +1767,10 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 
 	private void set_view_layout(long viewType, int width, int height, int left, int top, AdvertFile advertFile) {
 		String filePath = advertFile.getFilePath();
-		float scale = (float) 1080 / 768;
+		float scale = (float) 1080 / (float) 768;
 		height = (int) (height * scale);
+		if (top != 0)
+			top = (int) (top * scale);
 		RelativeLayout.LayoutParams layoutParams = new RelativeLayout.LayoutParams(width, height);
 		layoutParams.setMargins(left, top, 0, 0);
 		if (viewType == 1) {
@@ -1779,15 +1781,12 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 			imageView.setLayoutParams(layoutParams);
 			relativeLayout.addView(imageView);
 			if (imageUrl == null || imageUrl.isEmpty()) {
-				Glide.with(this).load(filePath).into(imageView);
-			} else {
-				if (adimgs.size() > 0) {
-					Glide.with(this).load(imageUrl).into(imageView);
-				} else if (adimgs_local.size() > 0) {
-					File file = new File(imageUrl);
-					Glide.with(this).load(file).into(imageView);
-				}
+				imageUrl = filePath;
+			} else if (adimgs_local.size() > 0) {
+				imageUrl = "file:/" + imageUrl;
 			}
+			Glide.with(this).load(imageUrl).into(imageView);
+			imageView.setScaleType(ImageView.ScaleType.FIT_XY);
 		} else if (viewType == 2) {
 			// 视频控件
 			RingLog.d(TAG, "set surface view");
