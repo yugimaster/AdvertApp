@@ -10,6 +10,7 @@ public class PlayingAdvert {
     private long templateid;
     private String startDate;
     private String endDate;
+    private String uri;
 
     public String getStartDate() {
         return startDate;
@@ -81,5 +82,12 @@ public class PlayingAdvert {
 
     public void setTemplateid(long templateid) {
         this.templateid = templateid;
+    }
+    public void setUri(String uri) {
+        this.uri = uri;
+    }
+
+    public String getUri() {
+        return uri;
     }
 }

@@ -15,6 +15,8 @@ import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 import com.grandartisans.advert.activity.MediaPlayerActivity;
 import com.grandartisans.advert.app.AdvertApp;
+import com.grandartisans.advert.common.Common;
+import com.grandartisans.advert.common.ScheduleTimesCache;
 import com.grandartisans.advert.model.AdvertModel;
 import com.grandartisans.advert.model.DownloadModel;
 import com.grandartisans.advert.model.entity.DownloadInfo;
@@ -44,6 +46,7 @@ import com.grandartisans.advert.model.entity.res.PositionVer;
 import com.grandartisans.advert.model.entity.res.PowerOnOffData;
 import com.grandartisans.advert.model.entity.res.ReportInfoResult;
 import com.grandartisans.advert.model.entity.res.TemplateRegion;
+import com.grandartisans.advert.model.entity.res.TerminalAdvertPackageVo;
 import com.grandartisans.advert.model.entity.res.TimeSchedule;
 import com.grandartisans.advert.model.entity.res.TimeScheduleVo;
 import com.grandartisans.advert.model.entity.res.TokenHttpResult;
@@ -96,7 +99,7 @@ public class UpgradeService extends Service {
     private int mDownloadStatus = DownloadInfo.STATUS_COMPLETE;
 
     public static String  mToken ;
-    private AdvertPosition mAdverPosition;
+    private List<AdvertPosition> mAdverPositions = new ArrayList<AdvertPosition>();
 
     private boolean isPowerAlarmSet = false;
 
@@ -122,6 +125,8 @@ public class UpgradeService extends Service {
     private String mUsbPath = "";
 
     private List<PlayingAdvert> adurls = new ArrayList<PlayingAdvert>();
+    private List<PlayingAdvert> adurls_imgs = new ArrayList<PlayingAdvert>();
+    private boolean mIsUpdate = false;
 
     Runnable runableUsbUpgrade = new Runnable() {
         @Override
@@ -605,10 +610,12 @@ public class UpgradeService extends Service {
                                                 //if (item.getAdvertPositionId() == AdvertVersion.getAdPositionId()) {
                                                 if (item.getVersion() != AdvertVersion.getAdVersion(item.getAdvertPositionId())) {
                                                     if (!isDownloadingAdFiles()) getAdList(token);
+                                                    break;
                                                 }
                                                 //}
                                             } else {
                                                 if (!isDownloadingAdFiles()) getAdList(token);
+                                                break;
                                             }
 
                                         }
@@ -735,16 +742,21 @@ public class UpgradeService extends Service {
         },null);
     }
     private void updateAdList(AdListHttpResult result){
-            adurls.clear();
-            downloadList.clear();
-            List<TemplateRegion> regionList  = result.getData().getTemplate().getRegionList();
-            TemplateRegion region = regionList.get(0);
+        // 将排期模板存入磁盘缓存
+        updateScheduleTimesCache(result);
+        adurls.clear();
+        adurls_imgs.clear();
+        downloadList.clear();
+        mAdverPositions.clear();
+        List<TemplateRegion> regionList  = result.getData().getTemplate().getRegionList();
+        EventBus.getDefault().post(new AppEvent(AppEvent.ADVERT_LIST_UPDATE_EVENT, result.getData()));
+        for (int m=0; m<regionList.size(); m++) {
+            TemplateRegion region = regionList.get(m);
             Long advertPositionId = result.getData().getRelationMap().get(region.getIdent());
             AdvertPositionVo advertPositionVo = result.getData().getAdvertPositionMap().get(advertPositionId);
-            EventBus.getDefault().post(new AppEvent(AppEvent.ADVERT_LIST_UPDATE_EVENT, result.getData()));
-            if(advertPositionVo!=null) {
+            if (advertPositionVo != null) {
                 List<DateScheduleVo> dateScheduleVos = advertPositionVo.getDateScheduleVos();
-                mAdverPosition = advertPositionVo.getadvertPosition();
+                mAdverPositions.add(advertPositionVo.getadvertPosition());
                 int size = dateScheduleVos.size();
                 //EventBus.getDefault().post(new AppEvent(AppEvent.ADVERT_LIST_UPDATE_EVENT, dateScheduleVos));
                 for (int i = 0; i < size; i++) {
@@ -760,8 +772,10 @@ public class UpgradeService extends Service {
                         for (int k = 0; k < packageAdverts.size(); k++) {
                             AdvertVo advertVo = packageAdverts.get(k);
                             Advert advert = advertVo.getAdvert();
+                            long vtype = advert.getVtype();
                             RingLog.d("getAdList advert name = " + advert.getName() + "advert description :" + advert.getDescription());
                             List<AdvertFile> fileList = advertVo.getFileList();
+                            Long vType = advertVo.getAdvert().getVtype();
                             for (int l = 0; l < fileList.size(); l++) {
                                 AdvertFile advertFile = fileList.get(l);
                                 DownloadInfo downloadInfo = new DownloadInfo();
@@ -770,6 +784,7 @@ public class UpgradeService extends Service {
                                 downloadInfo.setUrl(advertFile.getFilePath());
                                 downloadInfo.setName(advertFile.getName());
                                 downloadInfo.setStatus(DownloadInfo.STATUS_NOT_DOWNLOAD);
+                                downloadInfo.setViewType(vtype);
                                 downloadList.add(downloadInfo);
 
 
@@ -781,16 +796,24 @@ public class UpgradeService extends Service {
                                 item.setTemplateid(region.getTemplateid());
                                 item.setStartDate(dateSchedueVo.getDateSchedule().getStartDate());
                                 item.setEndDate(dateSchedueVo.getDateSchedule().getEndDate());
-                                item.setStartTime(timeScheduleVo.getTimeSchedule().getStartTime()+":00");
-                                item.setEndTime(timeScheduleVo.getTimeSchedule().getEndTime()+":00");
-                                adurls.add(item);
+                                item.setStartTime(timeScheduleVo.getTimeSchedule().getStartTime() + ":00");
+                                item.setEndTime(timeScheduleVo.getTimeSchedule().getEndTime() + ":00");
+
+
+                                if (vType == 2)
+                                    adurls.add(item);
+                                else {
+                                    item.setUri(advertFile.getFilePath());
+                                    adurls_imgs.add(item);
+                                }
 
                             }
                         }
                     }
                 }
             }
-            downloadAdList();
+        }
+        downloadAdList();
     }
 
     private void updatePlayListFilePath(String path){
@@ -801,15 +824,29 @@ public class UpgradeService extends Service {
                 item.setPath(path);
             }
         }
+        size = adurls_imgs.size();
+        for(int j=0;j<size;j++){
+            PlayingAdvert item = adurls_imgs.get(j);
+            if(path.contains(item.getMd5())){
+                item.setPath(path);
+            }
+        }
     }
 
-    private void saveAdvertVersion(AdvertPosition advertPosition) {
+    private void saveAdvertVersion(List<AdvertPosition> advertPositions) {
         Gson gson = new Gson();
         String str = gson.toJson(adurls);
         Log.i(TAG, "save advertlist = " + str);
         DevRing.cacheManager().diskCache("advertList").put("playList", str);
 
-        AdvertVersion.setAdVersion(advertPosition.getId().intValue(), advertPosition.getVersion());
+        str = gson.toJson(adurls_imgs);
+        Log.i(TAG, "save advertlist = " + str);
+        DevRing.cacheManager().diskCache("imageList").put("playList", str);
+
+        for(int i=0;i<advertPositions.size();i++) {
+            AdvertPosition advertPosition = advertPositions.get(i);
+            AdvertVersion.setAdVersion(advertPosition.getId().intValue(), advertPosition.getVersion());
+        }
     }
 
     private void getAdList(String token) {
@@ -854,9 +891,10 @@ public class UpgradeService extends Service {
             if(item.getStatus()==DownloadInfo.STATUS_NOT_DOWNLOAD) {
                 item.setStatus(DownloadInfo.STATUS_DOWNLOADING);
                 finished =false;
+                long vtype = item.getViewType();
                 Log.d(TAG,"check downloadAdList  download not DOWNLOAD file: " + item.getUrl());
                 //downloadFile(item.getUrl(), item.getFileMd5(), item.getFileMd5() + ".mp4", 1);
-                downloadWithXutils(item.getUrl(),item.getFileMd5(),item.getFileMd5()+".mp4",1);
+                downloadFileFromUrl(item, vtype, 1);
                 return;
             }
         }
@@ -865,15 +903,16 @@ public class UpgradeService extends Service {
             if(item.getStatus()==DownloadInfo.STATUS_DOWNLOAD_ERROR) {
                 item.setStatus(DownloadInfo.STATUS_DOWNLOADING);
                 finished = false;
+                long vtype = item.getViewType();
                 Log.d(TAG,"check downloadAdList  download downlaod error file: " + item.getUrl());
                 //downloadFile(item.getUrl(), item.getFileMd5(), item.getFileMd5() + ".mp4", 1);
-                downloadWithXutils(item.getUrl(),item.getFileMd5(),item.getFileMd5()+".mp4",1);
+                downloadFileFromUrl(item, vtype, 1);
                 break;
             }
         }
         if(finished) {
-            EventBus.getDefault().post(new AppEvent(AppEvent.ADVERT_LIST_DOWNLOAD_FINISHED_EVENT,mAdverPosition));
-            saveAdvertVersion(mAdverPosition);
+            EventBus.getDefault().post(new AppEvent(AppEvent.ADVERT_LIST_DOWNLOAD_FINISHED_EVENT,mAdverPositions));
+            saveAdvertVersion(mAdverPositions);
         }
     }
 
@@ -1000,19 +1039,21 @@ public class UpgradeService extends Service {
         DevRing.httpManager().downloadRequest(file, mIModel.downloadFile(downloadURL), mDownloadObserver, null);
     }
 
-    private void checkAvailableStorage(){
+    private void checkAvailableStorage(String fileDir){
         Log.i(TAG,"Total size :"+ CommonUtil.getTotalSize() + "Available Size : " + CommonUtil.getAvailableSize());
         long totalSize = CommonUtil.getTotalSize();
         long availableSize = CommonUtil.getAvailableSize();
         if(availableSize < (totalSize - totalSize*0.8)){
-            File delFile = new File(FileUtil.getExternalCacheDir(getApplicationContext()));
+            File delFile = new File(fileDir);
             if (delFile.isDirectory()) {
                 File[] files = delFile.listFiles();
                 for (File file : files) {
-                    if(file.getAbsolutePath().contains(".mp4")) {
-                        if(!isInDownloadList(file.getAbsolutePath())) {
+                    String file_abs_path = file.getAbsolutePath();
+                    if(file_abs_path.contains(".mp4") || file_abs_path.contains(".jpg")
+                            || file_abs_path.contains(".png")) {
+                        if(!isInDownloadList(file_abs_path)) {
                             file.delete();
-                            Log.i("tag", "delete file :" + file.getAbsolutePath());
+                            Log.i("tag", "delete file :" + file_abs_path);
                         }
                     }
                 }
@@ -1021,10 +1062,20 @@ public class UpgradeService extends Service {
     }
 
     private void downloadWithXutils(String url,final  String fileMd5,final String fileName,final int type){
-
-        final String filePath = FileUtil.getExternalCacheDir(getApplicationContext()) + "/" + fileName;
-        checkAvailableStorage();
-        File fileCheck = new File(FileUtil.getExternalCacheDir(getApplicationContext()), fileName);
+        String path = "";
+        String ex_cache_dir = FileUtil.getExternalCacheDir(getApplicationContext());
+        String file_dir = ex_cache_dir;
+        if (fileName.toLowerCase().endsWith("jpg") || fileName.toLowerCase().endsWith("png")) {
+            // 为图片创建新的cache目录
+            file_dir = ex_cache_dir + "/images";
+            Common.checkFileDir(file_dir);
+            path = ex_cache_dir + "/images/" + fileName;
+        } else {
+            path = ex_cache_dir + "/" + fileName;
+        }
+        final String filePath = path;
+        checkAvailableStorage(file_dir);
+        File fileCheck = new File(ex_cache_dir, fileName);
         if (fileCheck.exists() && fileCheck.length() >0 ) {
             if(EncryptUtil.md5sum(filePath).equals(fileMd5))
             {
@@ -1116,6 +1167,27 @@ public class UpgradeService extends Service {
             }
 
         });
+    }
+    private void downloadFileFromUrl(DownloadInfo downloadInfo, long viewType, int type) {
+        String file_url = downloadInfo.getUrl();
+        String file_md5 = downloadInfo.getFileMd5();
+        String file_type = "";
+        if (viewType == 1) {
+            file_type = Common.getFileType(file_url);
+        } else if (viewType == 2) {
+            file_type = ".mp4";
+        } else if (viewType == 3) {
+            file_type = Common.getFileType(file_url);
+        } else if (viewType == 4) {
+            file_type = ".txt";
+        }
+        downloadWithXutils(file_url, file_md5,file_md5 + file_type, type);
+    }
+
+    private void updateScheduleTimesCache(AdListHttpResult result) {
+        if (result == null)
+            return;
+        ScheduleTimesCache.update(result.getData());
     }
 
     /**

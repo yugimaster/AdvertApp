@@ -18,6 +18,7 @@ public class DownloadInfo {
     private String downloadPerSize;
     private int status;
     private String fileMd5;
+    private long viewType;
 
     public String getName() {
         return name;
@@ -81,5 +82,12 @@ public class DownloadInfo {
 
     public void setFileMd5(String fileMd5) {
         this.fileMd5 = fileMd5;
+    }
+    public void setViewType(long viewType) {
+        this.viewType = viewType;
+    }
+
+    public long getViewType() {
+        return viewType;
     }
 }

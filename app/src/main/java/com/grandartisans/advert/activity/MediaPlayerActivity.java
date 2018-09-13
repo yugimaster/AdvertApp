@@ -8,7 +8,10 @@ import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Date;
 import java.util.List;
+import java.util.Map;
 import java.util.TimeZone;
+import java.util.Timer;
+import java.util.TimerTask;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -51,13 +54,17 @@ import android.view.WindowManager;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.MediaController;
+import android.widget.RelativeLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 import android.widget.VideoView;
 
+import com.bumptech.glide.Glide;
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 import com.grandartisans.advert.app.AdvertApp;
+import com.grandartisans.advert.common.Common;
+import com.grandartisans.advert.common.ScheduleTimesCache;
 import com.grandartisans.advert.dbutils.PlayRecord;
 import com.grandartisans.advert.dbutils.dbutils;
 import com.grandartisans.advert.model.AdvertModel;
@@ -105,13 +112,18 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 	private MediaPlayer mMediaPlayer;
 	private MySurfaceView surface;
 	private SurfaceHolder surfaceHolder;
+	private RelativeLayout relativeLayout;
 
 	private TextView messageTV ;
 	private int playindex = 0;
+	private int img_playindex = 0;
 	private List<PlayingAdvert> adurls = new ArrayList<PlayingAdvert>();
 	private List<PlayingAdvert> downloading_ads = new ArrayList<PlayingAdvert>();
-
 	private List<PlayingAdvert> adurls_local = new ArrayList<PlayingAdvert>();
+
+	private List<PlayingAdvert> adimgs = new ArrayList<PlayingAdvert>();
+	private List<PlayingAdvert> adimgs_local = new ArrayList<PlayingAdvert>();
+	private List<PlayingAdvert> downloading_adimgs = new ArrayList<PlayingAdvert>();
 
 	//List<DateScheduleVo> dateScheduleVos;
 
@@ -154,6 +166,7 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 	private final int ON_PAUSE_EVENT_CMD = 100014;
 	private final int SET_POWER_ALARM_CMD = 100015;
 	private final int START_OPEN_SERIALPORT = 100016;
+	private final int USE_SCHEDULE_TIMES = 100017;
 
 	private String mMode ="";
 
@@ -216,6 +229,9 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 					break;
 				case SET_POWER_ALARM_CMD:
 					SetPowerAlarm();
+					break;
+				case USE_SCHEDULE_TIMES:
+					useScheduleTimes(true);
 					break;
 				default:
 					break;
@@ -326,7 +342,13 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 		setCurrentTime();
 		keepScreenWake();
 
+		Display display = getWindowManager().getDefaultDisplay(); // 为获取屏幕宽、高
+		Window window = getWindow();
 
+
+		Log.i(TAG,"display width = " + display.getWidth() + "display height = " + display.getHeight());
+
+		relativeLayout = (RelativeLayout) findViewById(R.id.rootframeview);
 
 		handler = new Handler();
 		mHandler.sendEmptyMessageDelayed(SET_POWER_ALARM_CMD,1000*60*10);
@@ -344,7 +366,7 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 
 		initVideoList();
 
-
+		initImageList();//加载图片列表
 
 		if(mMode.equals("AOSP on p313")) {
 			setDisplay();
@@ -380,11 +402,21 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 	}
 
 	private void initView(){
+		// 判断有无排期模板缓存 有则进行排板 无则使用默认模板
+		TerminalAdvertPackageVo tapvo = getScheduleTimesCache();
 		surface = (MySurfaceView) findViewById(R.id.surface);
 
 		surfaceHolder = surface.getHolder();// SurfaceHolder是SurfaceView的控制接口
 		surfaceHolder.addCallback(this);
 		surfaceHolder.setType(SurfaceHolder.SURFACE_TYPE_PUSH_BUFFERS);
+
+		if (tapvo != null) {
+			RingLog.d(TAG, "the schedule times is not none, let init it");
+			mTerminalAdvertPackageVo = tapvo;
+			mHandler.sendEmptyMessage(USE_SCHEDULE_TIMES);
+		}else {
+			RingLog.d(TAG, "the schedule times is none, let use default view");
+		}
 	}
 	/*
 	 * 初始化播放首段视频的player
@@ -995,6 +1027,28 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 
 	}
 
+	private void initImageList() {
+		String json_query = DevRing.cacheManager().diskCache("imageList").getString("playList");
+		Gson gson = new Gson();
+		if (json_query != null) {
+			adimgs = gson.fromJson(json_query, new TypeToken<List<PlayingAdvert>>() {}.getType());
+		} else {
+			RingLog.d(TAG, "diskCache imageList is none");
+		}
+		File path = new File("/system/media/imageList");
+		if (path.exists()) {
+			File[] files = path.listFiles();// 读取文件夹下文件
+			for (int i=0; i<files.length; i++) {
+				PlayingAdvert item = new PlayingAdvert();
+				Log.i(TAG, "interal image file = " + files[i].getAbsolutePath());
+				item.setPath(files[i].getAbsolutePath());
+				adimgs_local.add(item);
+			}
+		} else {
+			RingLog.d(TAG, "local image list does not exist");
+		}
+	}
+
 	private void savePlayRecord() {
 		if(adurls.size()>0) {
 			int index = playindex % adurls.size();
@@ -1146,6 +1200,35 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 		lock.unlock();
 		return url;
 	}
+	private String getValidImageUrl() {
+		String url = null;
+		boolean isUrlValid = false;
+		lock.lock();
+		Log.i(TAG, "adimgs size = " + adimgs.size() + "img play index = " + img_playindex);
+		Log.i(TAG, "adimgs_local size = " + adimgs_local.size()
+				+ "img play index" + img_playindex);
+		if (adimgs.size() > 0) {
+			url = findImageUrl();
+			if (url != null && !url.isEmpty()) {
+				isUrlValid = true;
+				int index = img_playindex % adimgs.size();
+				AdvertApp.setPlayingAdvert(adimgs.get(index));
+			} else {
+				isUrlValid = false;
+			}
+		}
+		if (!isUrlValid && adimgs_local.size() > 0) {
+			int index = img_playindex % adimgs_local.size();
+			url = adimgs_local.get(index).getPath();
+			PlayingAdvert playingAdvert = new PlayingAdvert();
+			Long id = Long.valueOf(0);
+			playingAdvert.setAdPositionID(id);
+			playingAdvert.setAdvertid(id);
+			AdvertApp.setPlayingAdvert(playingAdvert);
+		}
+		lock.lock();
+		return url;
+	}
 	private String findPlayUrl(){
 		String url="";
 		int size = adurls.size();
@@ -1177,6 +1260,40 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 		return url;
 	}
 
+	private String findImageUrl() {
+		String url = "";
+		int size = adimgs.size();
+		for (int i=0; i<size; i++) {
+			int index = img_playindex % adimgs.size();
+			PlayingAdvert playingAdvert = adimgs.get(index);
+			String startDate = playingAdvert.getStartDate() + " " + playingAdvert.getStartTime();
+			String endDate = playingAdvert.getEndDate() + " " + playingAdvert.getEndTime();
+			Log.i(TAG, "play image item " + playingAdvert.getPath() + "img play index = " +
+					img_playindex + "index = " + index + "path = " + playingAdvert.getPath());
+			Log.i(TAG, "play image item = " + startDate + " ~ " + endDate);
+			if (playingAdvert.getPath() != null && !playingAdvert.getPath().isEmpty()) {
+				if (playingAdvert.getStartDate() != null && !playingAdvert.getPath().isEmpty()) {
+					if (CommonUtil.compareDateState(startDate, endDate)) {
+						url = playingAdvert.getPath();
+						break;
+					} else if (CommonUtil.compareDateState("2015-01-01 00:00:00",
+							"2016-12-30 23:59:59")) {
+						url = playingAdvert.getPath();
+						break;
+					} else {
+						img_playindex++;
+					}
+				} else {
+					url = playingAdvert.getPath();
+					break;
+				}
+			} else {
+				img_playindex++;
+			}
+		}
+
+		return url;
+	}
 	private void updatePlayListFilePath(String path){
 		int size = downloading_ads.size();
 		for(int i=0;i<size;i++){
@@ -1184,6 +1301,27 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 			if(path.contains(item.getMd5())){
 				item.setPath(path);
 			}
+		}
+
+		for (int j=0; j<downloading_adimgs.size(); j++) {
+			PlayingAdvert item = downloading_adimgs.get(j);
+			if (path.contains(item.getMd5()))
+				item.setPath(path);
+		}
+	}
+
+
+	private void updatePlayList() {
+		//adurls.clear();
+		//adimgs.clear();
+		//playindex = 0;
+		//img_playindex = 0;
+
+		if (mTerminalAdvertPackageVo != null) {
+			// 更新排期模板缓存
+			//ScheduleTimesCache.update(mTerminalAdvertPackageVo);
+
+			useScheduleTimes(false);
 		}
 	}
 
@@ -1234,25 +1372,38 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
         }
 	}
 
-	private void saveAdvertVersion(AdvertPosition advertPosition){
+	private void saveAdvertVersion(List<AdvertPosition> advertPositions){
 		adurls.clear();
+		adimgs.clear();
 		playindex = 0;
+		img_playindex = 0;
 		for(int i=0;i<downloading_ads.size();i++){
 			adurls.add(downloading_ads.get(i));
 		}
 
+		for(int j=0;j<downloading_adimgs.size();j++){
+			adimgs.add(downloading_adimgs.get(j));
+		}
+
 
 		Gson gson = new Gson();
-		String str = gson.toJson(adurls);
-		Log.i(TAG, "save advertlist = " + str);
-		DevRing.cacheManager().diskCache("advertList").put("playList", str);
+		String str_adurls = gson.toJson(adurls);
+		Log.i(TAG, "save advertlist = " + str_adurls);
 
+		String str_adimgs = gson.toJson(adimgs);
+		Log.i(TAG, "save imagelist = " + str_adimgs);
+		DevRing.cacheManager().diskCache("advertList").put("playList", str_adurls);
+		DevRing.cacheManager().diskCache("imageList").put("playList", str_adimgs);
+		/*
 		AdvertVersion.setAdVersion(advertPosition.getId().intValue(),advertPosition.getVersion());
+		*/
+		/*
 		ReportSchedueVerParameter info = new ReportSchedueVerParameter();
 		info.setAdPositionID(advertPosition.getId());
 		info.setVersion(advertPosition.getVersion());
 		info.setTemplateid(mTerminalAdvertPackageVo.getTemplate().getTemplate().getId());
 		ReportScheduleVer();
+		*/
 	}
 
 	private int getScreenStatus(){
@@ -1433,13 +1584,12 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 			case AppEvent.ADVERT_LIST_UPDATE_EVENT:
 				//Log.i(TAG,"received event data = " + event.getData());
 				mTerminalAdvertPackageVo = (TerminalAdvertPackageVo) event.getData();
-				//adurls.clear();
-				//playindex = 0;
-				updateVideoList();
+                // 更新广告视频图片列表
+                updatePlayList();
 				//Log.i(TAG,"received event data size =  " + dateScheduleVos.size());
 				break;
 			case AppEvent.ADVERT_LIST_DOWNLOAD_FINISHED_EVENT:
-				saveAdvertVersion((AdvertPosition) event.getData());
+				saveAdvertVersion((List<AdvertPosition>) event.getData());
 				break;
 			case AppEvent.POWER_SET_ALARM_EVENT:
 				if ("POWER_OFF_ALARM".equals(event.getData())) {
@@ -1639,4 +1789,164 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 				break;
 		}
 	}
+	private void useScheduleTimes(Boolean IsSetLayout) {
+		RingLog.i("Use schedule times");
+		downloading_ads.clear();
+		downloading_adimgs.clear();
+		List<TemplateRegion> regionList = mTerminalAdvertPackageVo.getTemplate().getRegionList();
+		Map<String, Long> relationMap = mTerminalAdvertPackageVo.getRelationMap();
+		Map<Long, AdvertPositionVo> adPosMap = mTerminalAdvertPackageVo.getAdvertPositionMap();
+		for (int i=0; i<regionList.size(); i++) {
+			TemplateRegion region = regionList.get(i);
+			String regLocation = region.getLocation();
+			String[] regLocations = regLocation.split(",");
+			int regWidth = region.getWidth();
+			int regHeight = region.getHeight();
+			int marginLeft = Integer.valueOf(regLocations[0]);
+			int marginTop = Integer.valueOf(regLocations[1]);
+			Long adPosId = relationMap.get(region.getIdent());
+			AdvertPositionVo adPosVo = adPosMap.get(adPosId);
+			if (adPosVo != null) {
+				RingLog.i("Advert position vo is not null");
+				List<DateScheduleVo> dateScheduleVos = adPosVo.getDateScheduleVos();
+				for (int k=0; k<dateScheduleVos.size(); k++) {
+					DateScheduleVo dateScheduleVo = dateScheduleVos.get(k);
+					List<TimeScheduleVo> timeScheduleVos = dateScheduleVo.getTimeScheduleVos();
+					for (int j=0; j<timeScheduleVos.size(); j++) {
+						TimeScheduleVo timeScheduleVo = timeScheduleVos.get(j);
+						List<AdvertVo> advertVos = timeScheduleVo.getPackageAdverts();
+						for (int l=0; l<advertVos.size(); l++) {
+							AdvertVo advertVo = advertVos.get(l);
+							List<AdvertFile> advertFiles = advertVo.getFileList();
+							Long vType = advertVo.getAdvert().getVtype();
+							for (int m=0; m<advertFiles.size(); m++) {
+								AdvertFile advertFile = advertFiles.get(m);
+								if (IsSetLayout) {
+									set_view_layout(vType, regWidth, regHeight, marginLeft,
+											marginTop, advertFile);
+								}
+								add_playing_advert(advertFile, adPosId, region, dateScheduleVo,
+										timeScheduleVo, vType);
+							}
+						}
+					}
+				}
+			}
+		}
+		if (IsSetLayout)
+			switchImage();
+	}
+
+	private void set_view_layout(long viewType, int width, int height, int left, int top, AdvertFile advertFile) {
+		String filePath = advertFile.getFilePath();
+		/*
+		float scale = (float) 1080 / (float) 768;
+		height = (int) (height * scale);
+		if (top != 0)
+			top = (int) (top * scale);
+		*/
+
+		RingLog.d(TAG, "set_view_layout viewType = " + viewType + "width = " + width + "height = " + height + "left = " + left + "top = " + top );
+		RelativeLayout.LayoutParams layoutParams = new RelativeLayout.LayoutParams(width, height);
+		layoutParams.setMargins(left, top, 0, 0);
+		if (viewType == 1) {
+			// 图片控件
+			RingLog.d(TAG, "set image view");
+			String imageUrl = getValidImageUrl();
+			ImageView imageView = new ImageView(this);
+			imageView.setLayoutParams(layoutParams);
+			imageView.setScaleType(ImageView.ScaleType.FIT_XY);
+			relativeLayout.addView(imageView);
+			if (imageUrl == null || imageUrl.isEmpty()) {
+				imageUrl = filePath;
+			} else if (adimgs_local.size() > 0) {
+				imageUrl = "file:/" + imageUrl;
+			}
+			Glide.with(this).load(imageUrl).into(imageView);
+		} else if (viewType == 2) {
+			// 视频控件
+			RingLog.d(TAG, "set surface view");
+			surface.setLayoutParams(layoutParams);
+			surface.requestLayout();
+			relativeLayout.requestLayout();
+			/*
+			surfaceHolder = surface.getHolder();// SurfaceHolder是SurfaceView的控制接口
+			surfaceHolder.addCallback(this);
+			surfaceHolder.setType(SurfaceHolder.SURFACE_TYPE_PUSH_BUFFERS);
+			*/
+		}
+	}
+
+	private void add_playing_advert(AdvertFile advertFile, Long adPositionId, TemplateRegion region,
+									DateScheduleVo dateScheduleVo, TimeScheduleVo timeScheduleVo,
+									Long viewType) {
+		PlayingAdvert item = new PlayingAdvert();
+		item.setPath("");
+		item.setMd5(advertFile.getFileMd5());
+		item.setAdvertid(advertFile.getAdvertid());
+		item.setAdPositionID(adPositionId);
+		item.setTemplateid(region.getTemplateid());
+		item.setStartDate(dateScheduleVo.getDateSchedule().getStartDate());
+		item.setEndDate(dateScheduleVo.getDateSchedule().getEndDate());
+		item.setStartTime(timeScheduleVo.getTimeSchedule().getStartTime() + ":00");
+		item.setEndTime(timeScheduleVo.getTimeSchedule().getEndTime() + ":00");
+		if (viewType == 2)
+			downloading_ads.add(item);
+		else {
+			item.setUri(advertFile.getFilePath());
+			downloading_adimgs.add(item);
+		}
+	}
+
+
+	private TerminalAdvertPackageVo getScheduleTimesCache() {
+		return ScheduleTimesCache.get();
+	}
+
+	private void switchImage() {
+		try {
+			Thread.sleep(5000);
+		} catch (InterruptedException e) {
+			e.printStackTrace();
+		}
+		new Timer().schedule(new TimerTask() {
+			@Override
+			public void run() {
+				handlerImage.sendEmptyMessage(1);
+			}
+		}, 0, 10000);
+	}
+
+	Handler handlerImage = new Handler() {
+		public void handleMessage(Message msg) {
+			switch (msg.what) {
+				case 1:
+					if(adimgs.size()>0) {
+						img_playindex++;
+						System.out.println("image play index is: " + img_playindex);
+						if (img_playindex > adimgs.size() - 1) {
+							img_playindex = adimgs.size() - 1;
+						}
+						int childCount = relativeLayout.getChildCount();
+						for (int i = 0; i < childCount; i++) {
+							if (relativeLayout.getChildAt(i) instanceof ImageView) {
+								ImageView imageView = (ImageView) relativeLayout.getChildAt(i);
+								String filePath = adimgs.get(img_playindex).getPath();
+								if (filePath != null && !filePath.isEmpty()) {
+									File file = new File(filePath);
+									Glide.with(getApplicationContext()).load(file).into(imageView);
+								} else {
+									Glide.with(getApplicationContext())
+											.load(adimgs.get(img_playindex).getUri())
+											.into(imageView);
+								}
+							}
+						}
+						if (img_playindex == adimgs.size() - 1)
+							img_playindex = 0;
+					}
+					break;
+			}
+		}
+	};
 }
