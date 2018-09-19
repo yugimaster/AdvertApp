@@ -139,8 +139,8 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 
 	private boolean scaleMode = false;
 
-	private final  int threshold_temperature = 52;
-	private  final int temperature_read_times = 30; //连续获取到温度超过指定值次数大于该值，则认为温度过高了
+	private final  int threshold_temperature = 58;
+	private  final int temperature_read_times = 200; //连续获取到温度超过指定值次数大于该值，则认为温度过高了
 	private int temperature_read_count=0;
 
 	private PicoClient pClient= null;
@@ -185,6 +185,8 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 	private int mDoorState = DOOR_STATE_INIT;
 
 	private int mReportEventTimeInterval=5*60*1000;
+
+	private boolean  activate_started = false;
 
 	private Handler mHandler = new Handler()
 	{
@@ -356,27 +358,28 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 		startService(intentService);
 		*/
 
-		/*
+
 		PicoClient.OnEventListener mPicoOnEventListener = new PicoClient.OnEventListener() {
 		    @Override
             public void onEvent(PicoClient client, int etype, Object einfo) {
 		        //Log.d(TAG, "PicoClient onEvent" + "etype " + etype + " einfo " + (Float)einfo);
 
 		        if((Float)einfo  > threshold_temperature ) {
-					Log.d(TAG, "read temperature onEvent" + "etype " + etype + " einfo " + (Float)einfo +  "is to high");
+					Log.d(TAG, "read temperature onEvent" + "etype " + etype + " einfo " + (Float)einfo +  "is to high" + "read count = " + temperature_read_count);
+					LogToFile.i(TAG,"read temperature onEvent" + "etype " + etype + " einfo " + (Float)einfo +  "is to high "+"read count = " + temperature_read_count );
 					temperature_read_count ++ ;
 				}else {
 					temperature_read_count = 0;
 				}
 
 				if(temperature_read_count > temperature_read_times) {
-					Log.e(TAG, "temperature is too high , device will power off ");
+					LogToFile.i(TAG, "temperature is too high , device will power off ");
 				}
 
 		    }
         };
 		pClient = new PicoClient(mPicoOnEventListener, null);
-		*/
+
 	}
 
 	private void initView(){
@@ -511,10 +514,17 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 			handler.post(runableSetPowerOff);
 		}
         onResumeEvent();
-		mHandler.sendEmptyMessageDelayed(START_PLAYER_CMD,3*1000);
-		if(mMode.equals("GAPEDS4A4")) {
-			mHandler.sendEmptyMessageDelayed(START_OPEN_SERIALPORT, 5 * 1000);
-		}else{
+		if(activate_started == false) {
+			mHandler.sendEmptyMessageDelayed(START_PLAYER_CMD, 3 * 1000);
+			if(mMode.equals("GAPEDS4A4")) {
+				mHandler.sendEmptyMessageDelayed(START_OPEN_SERIALPORT, 5 * 1000);
+			}else{
+				openSerialPort();
+			}
+			activate_started =true;
+		}
+		else{
+			mHandler.sendEmptyMessage(START_PLAYER_CMD);
 			openSerialPort();
 		}
 		Log.i(TAG,"surfaceCreated");
@@ -549,6 +559,12 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 	}
 	private void onPauseEvent(){
 		Log.i(TAG,"onPauseEvent");
+		mHandler.removeMessages(START_PLAYER_CMD);
+
+		if(mMode.equals("GAPEDS4A4")) {
+			mHandler.removeMessages(START_OPEN_SERIALPORT);
+		}
+
 		if (serialPortUtils != null) {
 			serialPortUtils.closeSerialPort();
 		}
@@ -795,7 +811,7 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 
 	private void initAccSensor(){
 
-        //LogToFile.init(this);
+        LogToFile.init(this);
 
 		mSensorManager = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
 		mAccSensor = mSensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
