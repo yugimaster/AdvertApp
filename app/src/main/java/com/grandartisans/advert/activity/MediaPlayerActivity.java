@@ -7,6 +7,7 @@ import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.TimeZone;
@@ -69,6 +70,7 @@ import com.grandartisans.advert.dbutils.PlayRecord;
 import com.grandartisans.advert.dbutils.dbutils;
 import com.grandartisans.advert.model.AdvertModel;
 import com.grandartisans.advert.model.entity.DownloadInfo;
+import com.grandartisans.advert.model.entity.ImagePlayInfo;
 import com.grandartisans.advert.model.entity.PlayingAdvert;
 import com.grandartisans.advert.model.entity.event.AppEvent;
 import com.grandartisans.advert.model.entity.post.EventParameter;
@@ -124,6 +126,8 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 	private List<PlayingAdvert> adimgs = new ArrayList<PlayingAdvert>();
 	private List<PlayingAdvert> adimgs_local = new ArrayList<PlayingAdvert>();
 	private List<PlayingAdvert> downloading_adimgs = new ArrayList<PlayingAdvert>();
+
+	private Map<String, ImagePlayInfo> mImagePlayInfo = new HashMap<String, ImagePlayInfo>();
 
 	//List<DateScheduleVo> dateScheduleVos;
 
@@ -1029,12 +1033,17 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 
 	private void initImageList() {
 		String json_query = DevRing.cacheManager().diskCache("imageList").getString("playList");
+		String str_playInfo = DevRing.cacheManager().diskCache("imagePlayInfo").getString("playInfo");
 		Gson gson = new Gson();
 		if (json_query != null) {
 			adimgs = gson.fromJson(json_query, new TypeToken<List<PlayingAdvert>>() {}.getType());
 		} else {
 			RingLog.d(TAG, "diskCache imageList is none");
 		}
+		if (str_playInfo != null)
+			mImagePlayInfo = gson.fromJson(str_playInfo, new TypeToken<Map<String, ImagePlayInfo>>() {}.getType());
+		else
+			RingLog.d(TAG, "diskCache imagePlayInfo is none");
 		File path = new File("/system/media/imageList");
 		if (path.exists()) {
 			File[] files = path.listFiles();// 读取文件夹下文件
@@ -1200,7 +1209,8 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 		lock.unlock();
 		return url;
 	}
-	private String getValidImageUrl() {
+
+	private String getValidImageUrl(int layoutChildIndex) {
 		String url = null;
 		boolean isUrlValid = false;
 		lock.lock();
@@ -1208,11 +1218,9 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 		Log.i(TAG, "adimgs_local size = " + adimgs_local.size()
 				+ "img play index" + img_playindex);
 		if (adimgs.size() > 0) {
-			url = findImageUrl();
+			url = findImageUrl(layoutChildIndex);
 			if (url != null && !url.isEmpty()) {
 				isUrlValid = true;
-				int index = img_playindex % adimgs.size();
-				AdvertApp.setPlayingAdvert(adimgs.get(index));
 			} else {
 				isUrlValid = false;
 			}
@@ -1260,40 +1268,64 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 		return url;
 	}
 
-	private String findImageUrl() {
+	private String findImageUrl(int layoutChildIndex) {
 		String url = "";
-		int size = adimgs.size();
+		int offset = getImageOffset(layoutChildIndex);
+		ImagePlayInfo imagePlayInfo = mImagePlayInfo.get(String.valueOf(layoutChildIndex));
+		if (imagePlayInfo == null)
+			return url;
+		int size = imagePlayInfo.getImageListSize();
 		for (int i=0; i<size; i++) {
-			int index = img_playindex % adimgs.size();
-			PlayingAdvert playingAdvert = adimgs.get(index);
-			String startDate = playingAdvert.getStartDate() + " " + playingAdvert.getStartTime();
-			String endDate = playingAdvert.getEndDate() + " " + playingAdvert.getEndTime();
-			Log.i(TAG, "play image item " + playingAdvert.getPath() + "img play index = " +
-					img_playindex + "index = " + index + "path = " + playingAdvert.getPath());
-			Log.i(TAG, "play image item = " + startDate + " ~ " + endDate);
-			if (playingAdvert.getPath() != null && !playingAdvert.getPath().isEmpty()) {
-				if (playingAdvert.getStartDate() != null && !playingAdvert.getPath().isEmpty()) {
-					if (CommonUtil.compareDateState(startDate, endDate)) {
-						url = playingAdvert.getPath();
+			PlayingAdvert playingAdvert = adimgs.get(i + offset);
+			String startDate = playingAdvert.getStartDate();
+			String startDateTime = startDate + " " + playingAdvert.getStartTime();
+			String endDateTime = playingAdvert.getEndDate() + " " + playingAdvert.getEndTime();
+			String path = playingAdvert.getPath();
+			Log.i(TAG, "region " + layoutChildIndex + " : play image item " + path + " | index " + i);
+			if (path != null && !path.isEmpty()) {
+				if (startDate != null && !startDate.isEmpty()) {
+					if (CommonUtil.compareDateState(startDateTime, endDateTime)) {
+						Log.i(TAG, "image date time: " + startDateTime + " ~ " + endDateTime);
+						url = path;
 						break;
 					} else if (CommonUtil.compareDateState("2015-01-01 00:00:00",
 							"2016-12-30 23:59:59")) {
-						url = playingAdvert.getPath();
+						url = path;
+						AdvertApp.setPlayingAdvert(playingAdvert);
+						setImagePlayInfo(layoutChildIndex, i, size);
 						break;
 					} else {
-						img_playindex++;
+						if (i == (size - 1))
+							setImagePlayInfo(layoutChildIndex, -1, size);
 					}
 				} else {
-					url = playingAdvert.getPath();
+					url = path;
+					AdvertApp.setPlayingAdvert(playingAdvert);
+					setImagePlayInfo(layoutChildIndex, i, size);
 					break;
 				}
 			} else {
-				img_playindex++;
+				if (i == (size - 1))
+					setImagePlayInfo(layoutChildIndex, -1, size);
 			}
 		}
 
 		return url;
 	}
+
+	private int getImageOffset(int index) {
+		int offset = 0;
+		if (index == 0)
+			return offset;
+		for (int i = 0; i < index; i++) {
+			ImagePlayInfo imagePlayInfo = mImagePlayInfo.get(String.valueOf(i));
+			int size = imagePlayInfo.getImageListSize();
+			offset += size;
+		}
+
+		return offset;
+	}
+
 	private void updatePlayListFilePath(String path){
 		int size = downloading_ads.size();
 		for(int i=0;i<size;i++){
@@ -1796,10 +1828,12 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 		List<TemplateRegion> regionList = mTerminalAdvertPackageVo.getTemplate().getRegionList();
 		Map<String, Long> relationMap = mTerminalAdvertPackageVo.getRelationMap();
 		Map<Long, AdvertPositionVo> adPosMap = mTerminalAdvertPackageVo.getAdvertPositionMap();
+		int imageIndexOffset = 0;
 		for (int i=0; i<regionList.size(); i++) {
 			TemplateRegion region = regionList.get(i);
 			String regLocation = region.getLocation();
 			String[] regLocations = regLocation.split(",");
+			String videoType = region.getVideoType();
 			int regWidth = region.getWidth();
 			int regHeight = region.getHeight();
 			int marginLeft = Integer.valueOf(regLocations[0]);
@@ -1809,21 +1843,26 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 			if (adPosVo != null) {
 				RingLog.i("Advert position vo is not null");
 				List<DateScheduleVo> dateScheduleVos = adPosVo.getDateScheduleVos();
+				Long vType = Long.valueOf(videoType);
 				for (int k=0; k<dateScheduleVos.size(); k++) {
 					DateScheduleVo dateScheduleVo = dateScheduleVos.get(k);
 					List<TimeScheduleVo> timeScheduleVos = dateScheduleVo.getTimeScheduleVos();
 					for (int j=0; j<timeScheduleVos.size(); j++) {
 						TimeScheduleVo timeScheduleVo = timeScheduleVos.get(j);
 						List<AdvertVo> advertVos = timeScheduleVo.getPackageAdverts();
+						if (vType == 1) {
+							setImagePlayInfo(i - imageIndexOffset, 0, advertVos.size());
+						} else if (vType == 2) {
+							imageIndexOffset += 1;
+						}
 						for (int l=0; l<advertVos.size(); l++) {
 							AdvertVo advertVo = advertVos.get(l);
 							List<AdvertFile> advertFiles = advertVo.getFileList();
-							Long vType = advertVo.getAdvert().getVtype();
 							for (int m=0; m<advertFiles.size(); m++) {
 								AdvertFile advertFile = advertFiles.get(m);
 								if (IsSetLayout) {
 									set_view_layout(vType, regWidth, regHeight, marginLeft,
-											marginTop, advertFile);
+											marginTop, advertFile, i, l);
 								}
 								add_playing_advert(advertFile, adPosId, region, dateScheduleVo,
 										timeScheduleVo, vType);
@@ -1833,11 +1872,15 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 				}
 			}
 		}
+		updateImagePlayInfoCache();
 		if (IsSetLayout)
 			switchImage();
 	}
 
-	private void set_view_layout(long viewType, int width, int height, int left, int top, AdvertFile advertFile) {
+	private void set_view_layout(long viewType, int width, int height, int left, int top,
+								 AdvertFile advertFile, int layoutChildIndex, int listIndex) {
+		if (listIndex != 0)
+			return;
 		String filePath = advertFile.getFilePath();
 		/*
 		float scale = (float) 1080 / (float) 768;
@@ -1852,7 +1895,7 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 		if (viewType == 1) {
 			// 图片控件
 			RingLog.d(TAG, "set image view");
-			String imageUrl = getValidImageUrl();
+			String imageUrl = getValidImageUrl(layoutChildIndex);
 			ImageView imageView = new ImageView(this);
 			imageView.setLayoutParams(layoutParams);
 			imageView.setScaleType(ImageView.ScaleType.FIT_XY);
@@ -1899,11 +1942,20 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 	}
 
 
+	private void updateImagePlayInfoCache() {
+		Gson gson = new Gson();
+		String str_playInfo = gson.toJson(mImagePlayInfo);
+		Log.i(TAG, "save image play info = " + str_playInfo);
+		DevRing.cacheManager().diskCache("imagePlayInfo").put("playInfo", str_playInfo);
+	}
+
 	private TerminalAdvertPackageVo getScheduleTimesCache() {
 		return ScheduleTimesCache.get();
 	}
 
 	private void switchImage() {
+		if (mImagePlayInfo == null)
+			return;
 		try {
 			Thread.sleep(5000);
 		} catch (InterruptedException e) {
@@ -1917,34 +1969,54 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 		}, 0, 10000);
 	}
 
+	private void setImagePlayInfo(int regionListIndex, int currentIndex, int advertVosSize) {
+        ImagePlayInfo imagePlayInfo = new ImagePlayInfo();
+        imagePlayInfo.setCurrentIndex(currentIndex);
+        imagePlayInfo.setImageListSize(advertVosSize);
+        mImagePlayInfo.put(String.valueOf(regionListIndex), imagePlayInfo);
+    }
+
+    private void showImageWithIndex(ImageView imageView, int childCount) {
+		int offset = getImageOffset(childCount);
+		ImagePlayInfo imagePlayInfo = mImagePlayInfo.get(String.valueOf(childCount));
+		int currentIndex = imagePlayInfo.getCurrentIndex();
+		int size = imagePlayInfo.getImageListSize();
+		if (currentIndex == (size - 1)) {
+			System.out.println("index need reset to 0");
+			currentIndex = 0;
+		} else {
+			System.out.println("index + 1");
+			currentIndex += 1;
+		}
+		PlayingAdvert advert = adimgs.get(currentIndex + offset);
+		String path = advert.getPath();
+		if (path != null && !path.isEmpty()) {
+			File file = new File(path);
+			Glide.with(getApplicationContext()).load(file).into(imageView);
+		} else {
+			String uri = advert.getUri();
+			Glide.with(getApplicationContext()).load(uri).into(imageView);
+		}
+		setImagePlayInfo(childCount, currentIndex, size);
+		System.out.println("region " + childCount + ": image play index is " + currentIndex);
+	}
+
 	Handler handlerImage = new Handler() {
 		public void handleMessage(Message msg) {
 			switch (msg.what) {
 				case 1:
-					if(adimgs.size()>0) {
-						img_playindex++;
-						System.out.println("image play index is: " + img_playindex);
-						if (img_playindex > adimgs.size() - 1) {
-							img_playindex = adimgs.size() - 1;
-						}
-						int childCount = relativeLayout.getChildCount();
-						for (int i = 0; i < childCount; i++) {
-							if (relativeLayout.getChildAt(i) instanceof ImageView) {
-								ImageView imageView = (ImageView) relativeLayout.getChildAt(i);
-								String filePath = adimgs.get(img_playindex).getPath();
-								if (filePath != null && !filePath.isEmpty()) {
-									File file = new File(filePath);
-									Glide.with(getApplicationContext()).load(file).into(imageView);
-								} else {
-									Glide.with(getApplicationContext())
-											.load(adimgs.get(img_playindex).getUri())
-											.into(imageView);
-								}
-							}
-						}
-						if (img_playindex == adimgs.size() - 1)
-							img_playindex = 0;
-					}
+				    if (adimgs.size() > 0) {
+                        int childCount = relativeLayout.getChildCount();
+                        int imageIndexOffset = 0;
+                        for (int i = 0; i < childCount; i++) {
+                            if (relativeLayout.getChildAt(i) instanceof ImageView) {
+                                ImageView imageView = (ImageView) relativeLayout.getChildAt(i);
+                                int index = i - imageIndexOffset;
+							    showImageWithIndex(imageView, index);
+                            } else
+                                imageIndexOffset += 1;
+                        }
+                    }
 					break;
 			}
 		}
