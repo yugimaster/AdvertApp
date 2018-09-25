@@ -1353,7 +1353,12 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 			// 更新排期模板缓存
 			//ScheduleTimesCache.update(mTerminalAdvertPackageVo);
 
-			useScheduleTimes(false);
+			// 移除所有ImageView控件
+			removeImageView();
+
+			mImagePlayInfo.clear();
+			adimgs.clear();
+			useScheduleTimes(true);
 		}
 	}
 
@@ -1862,7 +1867,7 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 								AdvertFile advertFile = advertFiles.get(m);
 								if (IsSetLayout) {
 									set_view_layout(vType, regWidth, regHeight, marginLeft,
-											marginTop, advertFile, i, l);
+											marginTop, advertFile, i - imageIndexOffset, l);
 								}
 								add_playing_advert(advertFile, adPosId, region, dateScheduleVo,
 										timeScheduleVo, vType);
@@ -1917,6 +1922,18 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 			surfaceHolder.addCallback(this);
 			surfaceHolder.setType(SurfaceHolder.SURFACE_TYPE_PUSH_BUFFERS);
 			*/
+		}
+	}
+
+	private void removeImageView() {
+		int childCount = relativeLayout.getChildCount();
+		if (childCount <= 1)
+			return;
+		for (int i = 0; i < childCount; i++) {
+			if (relativeLayout.getChildAt(i) instanceof ImageView) {
+				ImageView imageView = (ImageView) relativeLayout.getChildAt(i);
+				relativeLayout.removeView(imageView);
+			}
 		}
 	}
 
