@@ -10,6 +10,8 @@ import android.telephony.PhoneStateListener;
 import android.telephony.SignalStrength;
 import android.telephony.TelephonyManager;
 import android.util.Log;
+import com.grandartisans.advert.dbutils.PlayRecord;
+import com.grandartisans.advert.dbutils.dbutils;
 
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
@@ -27,7 +29,9 @@ import com.grandartisans.advert.model.entity.post.AdvertParameter;
 import com.grandartisans.advert.model.entity.post.AdvertPositionContent;
 import com.grandartisans.advert.model.entity.post.AppUpgradeParameter;
 import com.grandartisans.advert.model.entity.post.DownLoadContent;
+import com.grandartisans.advert.model.entity.post.EventParameter;
 import com.grandartisans.advert.model.entity.post.HeartBeatParameter;
+import com.grandartisans.advert.model.entity.post.ReportEventData;
 import com.grandartisans.advert.model.entity.post.ReportInfoParameter;
 import com.grandartisans.advert.model.entity.post.TokenParameter;
 import com.grandartisans.advert.model.entity.post.UserAgent;
@@ -139,12 +143,14 @@ public class UpgradeService extends Service {
                 } catch (IOException e) {
                     e.printStackTrace();
                 }
-                StringBuilder sb = new StringBuilder();
+                StringBuilder sb1 = new StringBuilder();
                 try {
-                    sb = FileOperator.convertStreamToString(USB_UPGRADE_DEST_DIR + USB_UPGRADE_DIR + "/"+ USB_UPGRADE_GROUP_ORGFILE);
+                    sb1 = FileOperator.convertStreamToString(USB_UPGRADE_DEST_DIR + USB_UPGRADE_DIR + "/"+ USB_UPGRADE_GROUP_ORGFILE);
                 } catch (UnsupportedEncodingException e) {
                     e.printStackTrace();
                 }
+                StringBuilder sb = new StringBuilder();
+                sb.append(FileOperator.hexStr2Str(sb1.toString()));
 
                 String eventDataString = sb.toString();
                 Gson gson = new Gson();
@@ -182,7 +188,10 @@ public class UpgradeService extends Service {
                                         e.printStackTrace();
                                     }
 
-                                    String appUpgradeDataString = sb2.toString();
+                                    StringBuilder sb3 = new StringBuilder();
+                                    sb3.append(FileOperator.hexStr2Str(sb2.toString()));
+
+                                    String appUpgradeDataString = sb3.toString();
                                     if (appUpgradeDataString != null) {
                                         UpgradeHttpResult resultUpgrade = new UpgradeHttpResult();
                                         resultUpgrade = gson.fromJson(appUpgradeDataString, UpgradeHttpResult.class);
@@ -215,15 +224,17 @@ public class UpgradeService extends Service {
                                     e.printStackTrace();
                                 }
 
-                                StringBuilder sb1 = new StringBuilder();
+                                StringBuilder sb4 = new StringBuilder();
                                 scheduleFileName =USB_UPGRADE_DEST_DIR + USB_UPGRADE_DIR + "/"+ group.getGroupId()+USB_UPGRADE_SCHEDULE_SUB+USB_UPGRADE_ORGFILE_SUFFIX;
                                 try {
-                                    sb1 = FileOperator.convertStreamToString(scheduleFileName);
+                                    sb4 = FileOperator.convertStreamToString(scheduleFileName);
                                 } catch (UnsupportedEncodingException e) {
                                     e.printStackTrace();
                                 }
 
-                                String scheduleDataString = sb1.toString();
+                                StringBuilder sb5 = new StringBuilder();
+                                sb5.append(FileOperator.hexStr2Str(sb4.toString()));
+                                String scheduleDataString = sb5.toString();
                                 if (scheduleDataString != null) {
                                     AdListHttpResult result = new AdListHttpResult();
                                     result = gson.fromJson(scheduleDataString, AdListHttpResult.class);
@@ -302,7 +313,10 @@ public class UpgradeService extends Service {
                                         e.printStackTrace();
                                     }
 
-                                    String appUpgradeDataString = sb2.toString();
+                                    StringBuilder sb6 = new StringBuilder();
+                                    sb6.append(FileOperator.hexStr2Str(sb2.toString()));
+
+                                    String appUpgradeDataString = sb6.toString();
                                     if (appUpgradeDataString != null) {
                                         UpgradeHttpResult resultUpgrade = new UpgradeHttpResult();
                                         resultUpgrade = gson.fromJson(appUpgradeDataString, UpgradeHttpResult.class);
@@ -326,6 +340,8 @@ public class UpgradeService extends Service {
 
                                 file = new File(USB_UPGRADE_DEST_DIR + USB_UPGRADE_DIR);
                                 FileOperator.deleteFile(file);
+                                /*拷贝播放记录到U盘*/
+                                SavePlayRecordToUsb();
                                 sendMessage("USB更新完成",false);
                                 return ;
                             }
@@ -340,6 +356,60 @@ public class UpgradeService extends Service {
 
         }
     };
+    private void SavePlayRecordToUsb() {
+        List<PlayRecord> records = dbutils.getPlayRecordAll(PlayRecord.class);
+        String eventlistFile = mUsbPath+USB_UPGRADE_DIR+ "/eventlist";
+        List<EventParameter> list = new ArrayList<EventParameter>();
+        Gson gson = new Gson();
+        if(FileOperator.fileIsExists(eventlistFile)){
+            StringBuilder sb = new StringBuilder();
+            try {
+                sb = FileOperator.convertStreamToString(eventlistFile);
+            } catch (UnsupportedEncodingException e) {
+                e.printStackTrace();
+            }
+
+            String eventlistDataString = sb.toString();
+            if (eventlistDataString != null && eventlistDataString.length()>0) {
+                list = gson.fromJson(eventlistDataString, new TypeToken<List<EventParameter<ReportEventData>>>() {
+                }.getType());
+
+            }
+        }
+        if(records!=null && records.size()>0) {
+            for(int i=0;i<records.size();i++) {
+                PlayRecord recordItem = records.get(i);
+                if (recordItem.getCount() >0) {
+                    EventParameter parameter = new EventParameter();
+                    parameter.setSn(SystemInfoManager.readFromNandkey("usid").toUpperCase());
+                    parameter.setSessionid(CommonUtil.getRandomString(50));
+                    parameter.setTimestamp(System.currentTimeMillis());
+                    parameter.setToken(UpgradeService.mToken);
+                    parameter.setApp(Utils.getAppPackageName(getApplicationContext()));
+                    parameter.setEvent("playRecord");
+                    parameter.setEventtype(4000);
+
+                    parameter.setMac(CommonUtil.getEthernetMac());
+
+                    ReportEventData eventData = new ReportEventData();
+                    eventData.setCount(recordItem.getCount());
+                    eventData.setAdvertid(recordItem.getAdid());
+                    eventData.setAdPositionID(recordItem.getApid());
+                    eventData.setTemplateid(recordItem.getTpid());
+                    eventData.setStartTime(recordItem.getStarttime());
+                    eventData.setEndTime(recordItem.getEndtime());
+                    parameter.setEventData(eventData);
+                    parameter.setTimestamp(System.currentTimeMillis());
+                    list.add(parameter);
+                    dbutils.deletePlayRecord(PlayRecord.class,recordItem.getId());
+
+                }
+            }
+            String str = gson.toJson(list);
+            FileOperator.saveStringToFile(eventlistFile,str);
+        }
+
+    }
     private void updateAppOnUsb(){
         if(!isDownloadingAdFiles()) {
             String destFile = FileUtil.getExternalCacheDir(getApplicationContext()) + "/" + "advert.apk";
