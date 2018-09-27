@@ -291,7 +291,7 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 				isPowerOff = true;
 
 				if (mMediaPlayer != null && mMediaPlayer.isPlaying()) {
-					mMediaPlayer.stop();
+					mMediaPlayer.pause();
 				}
 				setScreen(0);
 
@@ -1205,7 +1205,7 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 
 	private void updateVideoList() {
 		//playindex=0;
-
+		downloading_ads.clear();
 		if(mTerminalAdvertPackageVo!=null ) {
 			List<DateScheduleVo> dateScheduleVos=null;
 			List<TemplateRegion> regionList  = mTerminalAdvertPackageVo.getTemplate().getRegionList();
