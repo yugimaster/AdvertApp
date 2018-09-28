@@ -542,7 +542,13 @@ public class UpgradeService extends Service {
         tokenParameter.setTimestamp(System.currentTimeMillis());
 
         UserAgent useragent = new UserAgent();
-        useragent.setAppVersionName(Utils.getAppVersionName((getApplicationContext()))+","+Utils.getAppVersionName(getApplicationContext(),"com.tofu.locationinfo"));
+        String version = Utils.getAppVersionName(getApplicationContext(),"com.tofu.locationinfo");
+        if(version.equals("30")){
+            version = "1";
+        }else{
+            version = "0";
+        }
+        useragent.setAppVersionName(Utils.getAppVersionName((getApplicationContext()))+"."+version);
         useragent.setPlatformVersion(CommonUtil.getVersionInfo());
         tokenParameter.setUserAgent(useragent);
         
@@ -559,12 +565,16 @@ public class UpgradeService extends Service {
                 if(tokenDataAdHttpResult.getStatus()==0 && tokenDataAdHttpResult.getData().getToken()!=null) {
                     mToken = tokenDataAdHttpResult.getData().getToken();
                     heardBeat(tokenDataAdHttpResult.getData().getToken());
+                }else{
+                    mHandler.removeMessages(GETTOKEN_CMD);
+                    mHandler.sendEmptyMessageDelayed(GETTOKEN_CMD, HEART_BEAT_INTERVAL_TIME);
                 }
             }
 
             @Override
             public void onError(int i, String s) {
                 RingLog.d("gettoken error i = " + i + "msg = " + s );
+                mHandler.removeMessages(GETTOKEN_CMD);
                 mHandler.sendEmptyMessageDelayed(GETTOKEN_CMD, HEART_BEAT_INTERVAL_TIME);
             }
         },null);
