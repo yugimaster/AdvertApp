@@ -3,6 +3,9 @@ package com.grandartisans.advert.service;
 import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
+import android.content.pm.PackageInfo;
+import android.content.pm.PackageManager;
+import android.net.TrafficStats;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Message;
@@ -96,7 +99,7 @@ public class UpgradeService extends Service {
     private final int UPGRADE_APP_ON_USB_CMD = 10006;
     private final int SHOW_TIME_INFO_CMD = 10007;
 
-    private final int HEART_BEAT_INTERVAL_TIME = 30*1000;// 心跳检测发送时间
+    private final int HEART_BEAT_INTERVAL_TIME = 60*1000;// 心跳检测发送时间
 
     private final int UPGRADE_INTERVAL_TIME = 10*60*1000;
 
@@ -615,7 +618,7 @@ public class UpgradeService extends Service {
         String version = Utils.getAppVersionName(getApplicationContext(),"com.tofu.locationinfo");
         if(version.equals("30")){
             version = "1";
-        }else{
+        }else if(version.equals("29") || version.equals("28")){
             version = "0";
         }
         useragent.setAppVersionName(Utils.getAppVersionName((getApplicationContext()))+"."+version);
@@ -645,10 +648,39 @@ public class UpgradeService extends Service {
             public void onError(int i, String s) {
                 RingLog.d("gettoken error i = " + i + "msg = " + s );
                 mHandler.removeMessages(GETTOKEN_CMD);
-                mHandler.sendEmptyMessageDelayed(GETTOKEN_CMD, HEART_BEAT_INTERVAL_TIME);
+                mHandler.sendEmptyMessageDelayed(GETTOKEN_CMD, 30000);
             }
         },null);
 
+    }
+
+
+    public void getAppTrafficList(){
+        //获取所有的安装在手机上的应用软件的信息，并且获取这些软件里面的权限信息
+        PackageManager pm=getPackageManager();//获取系统应用包管理
+        //获取每个包内的androidmanifest.xml信息，它的权限等等
+        List<PackageInfo> pinfos=pm.getInstalledPackages(PackageManager.GET_UNINSTALLED_PACKAGES | PackageManager.GET_PERMISSIONS);
+        //遍历每个应用包信息
+        for(PackageInfo info:pinfos){
+            //请求每个程序包对应的androidManifest.xml里面的权限
+            String[] premissions=info.requestedPermissions;
+            if(premissions!=null && premissions.length>0){
+                //找出需要网络服务的应用程序
+                for(String premission : premissions){
+                    if("android.permission.INTERNET".equals(premission)){
+                        //获取每个应用程序在操作系统内的进程id
+                        int uId=info.applicationInfo.uid;
+                        //如果返回-1，代表不支持使用该方法，注意必须是2.2以上的
+                        long rx=TrafficStats.getUidRxBytes(uId);
+                        //如果返回-1，代表不支持使用该方法，注意必须是2.2以上的
+                        long tx=TrafficStats.getUidTxBytes(uId);
+
+                        RingLog.d(info.applicationInfo.loadLabel(pm)+"消耗的流量-- uid = " + uId +"tx :" + tx +"rx:" + rx);
+
+                    }
+                }
+            }
+        }
     }
 
     private void heardBeat(final String token ) {
@@ -661,6 +693,9 @@ public class UpgradeService extends Service {
             @Override
             public void onResult(HeartBeatResult result) {
                 RingLog.d("send HeartBeat ok status = " + result.getStatus() );
+                TrafficStats.getTotalTxBytes();
+                RingLog.d("Total snd Bytes : " + TrafficStats.getTotalTxBytes() + "recv Bytes: " + TrafficStats.getTotalRxBytes());
+                //getAppTrafficList();
                 if(result!=null){
                     if(result.getStatus()==0) {
                         List<HeartBeatData> data = result.getData();
@@ -800,7 +835,7 @@ public class UpgradeService extends Service {
             @Override
             public void onError(int i, String s) {
                 RingLog.d("send HeartBeat error  i = " + i + "msg = " + s );
-                mHandler.sendEmptyMessageDelayed(HEART_BEAT_CMD, HEART_BEAT_INTERVAL_TIME);
+                mHandler.sendEmptyMessageDelayed(HEART_BEAT_CMD, 30000);
             }
         },null);
     }
