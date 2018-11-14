@@ -1371,7 +1371,7 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 			removeImageView();
 
 			mImagePlayInfo.clear();
-			adimgs.clear();
+			//adimgs.clear();
 			useScheduleTimes(true);
 		}
 	}
@@ -1445,9 +1445,6 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 		Log.i(TAG, "save imagelist = " + str_adimgs);
 		DevRing.cacheManager().diskCache("advertList").put("playList", str_adurls);
 		DevRing.cacheManager().diskCache("imageList").put("playList", str_adimgs);
-		/*
-		AdvertVersion.setAdVersion(advertPosition.getId().intValue(),advertPosition.getVersion());
-		*/
 		/*
 		ReportSchedueVerParameter info = new ReportSchedueVerParameter();
 		info.setAdPositionID(advertPosition.getId());
