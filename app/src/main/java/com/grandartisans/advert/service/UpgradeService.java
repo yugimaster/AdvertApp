@@ -43,6 +43,7 @@ import com.grandartisans.advert.model.entity.res.AdvertPosition;
 import com.grandartisans.advert.model.entity.res.AdvertPositionVo;
 import com.grandartisans.advert.model.entity.res.AdvertVo;
 import com.grandartisans.advert.model.entity.res.AppUpgradeData;
+import com.grandartisans.advert.model.entity.res.BrightnessData;
 import com.grandartisans.advert.model.entity.res.DateSchedule;
 import com.grandartisans.advert.model.entity.res.DateScheduleVo;
 import com.grandartisans.advert.model.entity.res.HeartBeatData;
@@ -55,6 +56,7 @@ import com.grandartisans.advert.model.entity.res.TimeSchedule;
 import com.grandartisans.advert.model.entity.res.TimeScheduleVo;
 import com.grandartisans.advert.model.entity.res.TokenHttpResult;
 import com.grandartisans.advert.model.entity.res.UpgradeHttpResult;
+import com.grandartisans.advert.model.entity.res.VolumeData;
 import com.grandartisans.advert.utils.AdvertVersion;
 import com.grandartisans.advert.utils.CommonUtil;
 import com.grandartisans.advert.utils.EncryptUtil;
@@ -814,6 +816,46 @@ public class UpgradeService extends Service {
 
                                                 EventBus.getDefault().post(new AppEvent(AppEvent.POWER_UPDATE_ALARM_EVENT, powerOnOffData));
                                                 isPowerAlarmSet = true;
+                                            }
+                                        }
+                                    }
+                                }
+                                else if (dataItem.getEventID().equals("1008")) {
+                                    List<VolumeData> list = new ArrayList<>();
+                                    if (dataItem.getEventData().getClass().equals(list.getClass())) {
+                                        String eventDataString = dataItem.getEventData().toString();
+                                        Gson gson = new Gson();
+                                        if (eventDataString != null) {
+                                            list = gson.fromJson(eventDataString, new TypeToken<List<VolumeData>>() {}.getType());
+                                        }
+                                        if (list != null && list.size() > 0) {
+                                            VolumeData volumeData = list.get(0);
+                                            int volumeValue = volumeData.getVolume();
+                                            RingLog.d(TAG, "volumedata volume=" + volumeValue);
+                                            int volume = DevRing.cacheManager().spCache("VolumeData").getInt("volume", 20);
+                                            if (volume != volumeValue) {
+                                                DevRing.cacheManager().spCache("VolumeData").put("volume", volumeValue);
+                                                EventBus.getDefault().post(new AppEvent(AppEvent.SET_VOLUME_EVENT, volumeValue));
+                                            }
+                                        }
+                                    }
+                                }
+                                else if (dataItem.getEventID().equals("1009")) {
+                                    List<BrightnessData> list = new ArrayList<>();
+                                    if (dataItem.getEventData().getClass().equals(list.getClass())) {
+                                        String eventDataString = dataItem.getEventData().toString();
+                                        Gson gson = new Gson();
+                                        if (eventDataString != null) {
+                                            list = gson.fromJson(eventDataString, new TypeToken<List<VolumeData>>() {}.getType());
+                                        }
+                                        if (list != null && list.size() > 0) {
+                                            BrightnessData brightnessData = list.get(0);
+                                            int brightness = brightnessData.getBrightness();
+                                            RingLog.d(TAG, "brightnessdata brightness=" + brightness);
+                                            int brightnessCache = DevRing.cacheManager().spCache("BrightnessData").getInt("brightness", 5);
+                                            if (brightnessCache != brightness) {
+                                                DevRing.cacheManager().spCache("BrightnessData").put("brightness", brightness);
+                                                EventBus.getDefault().post(new AppEvent(AppEvent.SET_BRIGHTNESS_EVENT, brightness));
                                             }
                                         }
                                     }
