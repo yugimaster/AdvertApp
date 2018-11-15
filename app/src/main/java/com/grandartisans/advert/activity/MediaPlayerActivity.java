@@ -37,6 +37,8 @@ import com.grandartisans.advert.dbutils.dbutils;
 import com.grandartisans.advert.interfaces.ElevatorDoorEventListener;
 import com.grandartisans.advert.interfaces.ElevatorEventListener;
 import com.grandartisans.advert.model.AdvertModel;
+import com.grandartisans.advert.model.AudioMngModel;
+import com.grandartisans.advert.model.ScreenMngModel;
 import com.grandartisans.advert.model.entity.PlayingAdvert;
 import com.grandartisans.advert.model.entity.event.AppEvent;
 import com.grandartisans.advert.model.entity.post.EventParameter;
@@ -139,6 +141,8 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 	private float mInitZ = 0;
 	private ElevatorStatusManager mElevatorStatusManager;
 	private ElevatorDoorManager mElevatorDoorManager;
+	private AudioMngModel mAudioMngModel;
+	private ScreenMngModel mScreenMngModel;
 
 
 	private int mReportEventTimeInterval=5*60*1000;
@@ -985,6 +989,18 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 				mHandler.removeMessages(SET_POWER_ALARM_CMD);
 				ResetPowerOffAlarm(powerOnOffData.getEndTime());
 				ResetPowerOnAlarm(powerOnOffData.getStartTime());
+			case AppEvent.SET_VOLUME_EVENT:
+				int volume = (int)event.getData();
+				mAudioMngModel = new AudioMngModel(MediaPlayerActivity.this);
+				mAudioMngModel.setVoiceHundred(volume);
+				RingLog.d("EventBus", "set volume value: " + volume);
+				break;
+			case AppEvent.SET_BRIGHTNESS_EVENT:
+				int brightness = (int)event.getData();
+				mScreenMngModel = new ScreenMngModel(MediaPlayerActivity.this);
+				mScreenMngModel.setScreenBrightness(brightness);
+				RingLog.d("EventBus", "set brightness value: " + brightness);
+				break;
 			default:
 				break;
 		}
