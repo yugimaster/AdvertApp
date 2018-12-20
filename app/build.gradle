@@ -39,8 +39,9 @@ dependencies {
 
     compile(name: 'library-multidownload', ext: 'aar')
     compile(name: 'devring-debug', ext: 'aar')
+    compile(name: 'library-yasea', ext: 'aar')
     compile 'org.xutils:xutils:3.3.36'
-
+    compile 'com.aliyun.dpa:oss-android-sdk:+'
     //Rxjava2 & RxAndroid2
     api 'io.reactivex.rxjava2:rxjava:2.1.6'
     api 'io.reactivex.rxjava2:rxandroid:2.0.1'
