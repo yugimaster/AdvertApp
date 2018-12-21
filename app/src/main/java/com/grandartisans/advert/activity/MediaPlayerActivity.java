@@ -2,9 +2,6 @@ package com.grandartisans.advert.activity;
 
 import java.io.File;
 import java.io.IOException;
-import java.io.PrintWriter;
-import java.io.StringWriter;
-import java.io.Writer;
 import java.net.SocketException;
 import java.text.MessageFormat;
 import java.text.SimpleDateFormat;
@@ -13,7 +10,6 @@ import java.util.Calendar;
 import java.util.Date;
 import java.util.List;
 import java.util.TimeZone;
-import java.util.Timer;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -120,7 +116,7 @@ import org.json.JSONArray;
 
 import gartisans.hardware.pico.PicoClient;
 
-public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callback,SensorEventListener,SrsEncodeHandler.SrsEncodeListener,SrsRecordHandler.SrsRecordListener,RtmpHandler.RtmpListener,MediaRecorder.OnInfoListener{
+public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callback,SensorEventListener,SrsEncodeHandler.SrsEncodeListener {
 	private final String TAG = "MediaPlayerActivity";
 	private MediaPlayer mMediaPlayer;
 	private MySurfaceView surface;
@@ -178,7 +174,6 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 	private final int STOP_PUSH_RTMP = 100018;
 
 	private String mMode ="";
-	private String deviceId = "";
 
 	static final float THRESHOLD = 0.2f; //0.08f;
 	static final int LIFT_STATE_INIT = 0;
@@ -193,17 +188,11 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 	static final int DOOR_STATE_INIT  = 0;
 	static final int DOOR_STATE_OPENED  = 1;
 	static final int DOOR_STATE_CLOSED = 2;
-	static final String RECORD_CHANNEL = "rtmp://119.23.28.204:1935/record";
-	static final String RTMP_CHANNEL = "rtmp://119.23.28.204:1935/live";
 
 	private SensorManager mSensorManager;
 	private Sensor mAccSensor;
 	public static SrsCameraView mCameraView;
 	public static SrsPublisher mPublisher;
-	private Camera mCamera;
-	private MediaRecorder mMediaRecorder;
-	private SurfaceView mRecordView;
-	private SurfaceHolder mRecordHolder;
 	private NetworkService mNetworkService;
 	private ServiceConnection mServiceConn;
 	private boolean AccSensorEnabled = false;
@@ -1655,7 +1644,7 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 
 	private void handleException(Exception e) {
 		try {
-			Toast.makeText(getApplicationContext(), e.getMessage(), Toast.LENGTH_SHORT).show();
+			RingLog.d(TAG, e.getMessage());
 		} catch (Exception e1) {
 			//
 		}
@@ -1663,108 +1652,11 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 
 	@Override
 	public void onNetworkWeak() {
-		Toast.makeText(getApplicationContext(), "网络型号弱", Toast.LENGTH_SHORT).show();
+		RingLog.d(TAG, "The network is weak");
 	}
 
 	@Override
 	public void onNetworkResume() {}
-
-	@Override
-	public void onRtmpConnecting(String msg) {
-		Toast.makeText(getApplicationContext(), msg, Toast.LENGTH_SHORT).show();
-	}
-
-	@Override
-	public void onRtmpConnected(String msg) {
-		Toast.makeText(getApplicationContext(), msg, Toast.LENGTH_SHORT).show();
-		IsPublishRecord = true;
-	}
-
-	@Override
-	public void onRtmpVideoStreaming() {}
-
-	@Override
-	public void onRtmpAudioStreaming() {}
-
-	@Override
-	public void onRtmpStopped() {
-		Toast.makeText(getApplicationContext(), "RTMP已停止", Toast.LENGTH_SHORT).show();
-		IsPublishRecord = false;
-	}
-
-	@Override
-	public void onRtmpDisconnected() {
-		Toast.makeText(getApplicationContext(), "未连接服务器", Toast.LENGTH_SHORT).show();
-	}
-
-	@Override
-	public void onRtmpVideoFpsChanged(double fps) {}
-
-	@Override
-	public void onRtmpVideoBitrateChanged(double bitrate) {}
-
-	@Override
-	public void onRtmpAudioBitrateChanged(double bitrate) {}
-
-	@Override
-	public void onRtmpSocketException(SocketException e) {
-		handleException(e);
-	}
-
-	@Override
-	public void onRtmpIOException(IOException e) {
-		handleException(e);
-	}
-
-	@Override
-	public void onRtmpIllegalArgumentException(IllegalArgumentException e) {
-		handleException(e);
-	}
-
-	@Override
-	public void onRtmpIllegalStateException(IllegalStateException e) {
-		handleException(e);
-	}
-
-	@Override
-	public void onRecordPause() {
-		Toast.makeText(getApplicationContext(), "Record paused", Toast.LENGTH_SHORT).show();
-	}
-
-	@Override
-	public void onRecordResume() {
-		Toast.makeText(getApplicationContext(), "Record resumed", Toast.LENGTH_SHORT).show();
-	}
-
-	@Override
-	public void onRecordStarted(String msg) {
-		Toast.makeText(getApplicationContext(), "Recording file: " + msg, Toast.LENGTH_SHORT).show();
-	}
-
-
-	@Override
-	public void onRecordFinished(String msg) {
-		Toast.makeText(getApplicationContext(), "MP4 file saved: " + msg, Toast.LENGTH_SHORT).show();
-		IsPublishRecord = false;
-	}
-
-	@Override
-	public void onRecordIOException(IOException e) {
-		handleException(e);
-	}
-
-	@Override
-	public void onRecordIllegalArgumentException(IllegalArgumentException e) {
-		handleException(e);
-	}
-
-	@Override
-	public void onInfo(MediaRecorder mediaRecorder, int what, int extra) {
-		if (what == MediaRecorder.MEDIA_RECORDER_INFO_MAX_DURATION_REACHED) {
-			RingLog.d("Maximum Filesize Reached");
-			stopCameraRecord();
-		}
-	}
 
 	private void setLiftState(int liftState) {
 		mLiftState = liftState;
@@ -1824,9 +1716,6 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 		mPublisher = new SrsPublisher(mCameraView);
 		// 编码状态回调
 		mPublisher.setEncodeHandler(new SrsEncodeHandler(this));
-		mPublisher.setRecordHandler(new SrsRecordHandler(this));
-		// RTMP推流状态回调
-		mPublisher.setRtmpHandler(new RtmpHandler(this));
 		// 预览分辨率
 		mPublisher.setPreviewResolution(1280, 720);
 		// 推流分辨率
@@ -1853,94 +1742,6 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 			mPublisher.stopRecord();
 		}
 	}
-
-    private void startCameraRecord() {
-        RingLog.d(TAG, "Open Record Camera");
-        String deviceId = SystemInfoManager.readFromNandkey("usid");
-        if (deviceId == null) {
-            deviceId = "G50234001485210002";
-        }
-		mCamera = Camera.open(0);
-        mCamera.unlock();
-
-        mRecordView = new SurfaceView(this);
-        setContentView(mRecordView);
-        mRecordHolder = mRecordView.getHolder();
-        mRecordHolder.setType(SurfaceHolder.SURFACE_TYPE_PUSH_BUFFERS);
-
-        mMediaRecorder = new MediaRecorder();
-        mMediaRecorder.setCamera(mCamera);
-        mMediaRecorder.setAudioSource(MediaRecorder.AudioSource.DEFAULT);
-        mMediaRecorder.setVideoSource(MediaRecorder.VideoSource.CAMERA);
-        mMediaRecorder.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4);
-        mMediaRecorder.setAudioEncoder(MediaRecorder.AudioEncoder.DEFAULT);
-        mMediaRecorder.setVideoEncoder(MediaRecorder.VideoEncoder.H264);
-        mMediaRecorder.setVideoSize(640, 480);
-        mMediaRecorder.setVideoFrameRate(30);
-        mMediaRecorder.setVideoEncodingBitRate(500 * 1024);
-        mMediaRecorder.setPreviewDisplay(mRecordHolder.getSurface());
-        mMediaRecorder.setMaxDuration(60 * 1000);
-        File file = new File(Environment.getExternalStorageDirectory().getPath() + "/" + deviceId + ".mp4");
-        if (file.exists()) {
-            file.delete();
-        }
-        try {
-            file.createNewFile();
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-        mMediaRecorder.setOutputFile(file.getAbsolutePath());
-
-        mRecordHolder.addCallback(new SurfaceHolder.Callback() {
-            @Override
-            public void surfaceCreated(SurfaceHolder holder) {
-                try {
-                    mMediaRecorder.prepare();
-                } catch (Exception e) {
-                    Writer writer = new StringWriter();
-                    PrintWriter printWriter = new PrintWriter(writer);
-                    e.printStackTrace(printWriter);
-                    Throwable cause = e.getCause();
-                    while (cause != null) {
-                        cause.printStackTrace(printWriter);
-                        cause = cause.getCause();
-                    }
-                    String str = writer.toString();
-                    System.out.println(str);
-                }
-            }
-
-            @Override
-            public void surfaceChanged(SurfaceHolder holder, int format, int width, int height) {
-
-            }
-
-            @Override
-            public void surfaceDestroyed(SurfaceHolder holder) {
-
-            }
-        });
-        mMediaRecorder.setOnInfoListener(this);
-        mMediaRecorder.start();
-    }
-
-	private void stopCameraRecord() {
-		if (mMediaRecorder != null) {
-			mMediaRecorder.stop();
-			mMediaRecorder.reset();
-			mMediaRecorder.release();
-			mMediaRecorder = null;
-			RingLog.d(TAG, "Stop record");
-		}
-	}
-
-	private void resetCamera() {
-	    mCamera.stopPreview();
-	    mCamera.setPreviewCallback(null);
-	    mCamera.setPreviewCallbackWithBuffer(null);
-	    mCamera.release();
-	    mCamera = null;
-    }
 
     private void initNetworkService() {
 		initCameraView();

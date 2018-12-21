@@ -19,17 +19,21 @@ import com.alibaba.sdk.android.oss.common.auth.OSSCredentialProvider;
 import com.alibaba.sdk.android.oss.common.auth.OSSPlainTextAKSKCredentialProvider;
 import com.alibaba.sdk.android.oss.model.PutObjectRequest;
 import com.alibaba.sdk.android.oss.model.PutObjectResult;
+import com.github.faucamp.simplertmp.RtmpHandler;
 import com.grandartisans.advert.activity.MediaPlayerActivity;
 import com.grandartisans.advert.utils.SystemInfoManager;
 import com.ljy.devring.other.RingLog;
 
 import net.ossrs.yasea.SrsPublisher;
+import net.ossrs.yasea.SrsRecordHandler;
 
+import java.io.IOException;
+import java.net.SocketException;
 import java.util.Calendar;
 import java.util.Timer;
 import java.util.TimerTask;
 
-public class CameraService extends Service {
+public class CameraService extends Service implements SrsRecordHandler.SrsRecordListener,RtmpHandler.RtmpListener {
     private SrsPublisher mPublisher;
     private Camera mCamera;
     private MediaRecorder mMediaRecorder;
@@ -38,8 +42,9 @@ public class CameraService extends Service {
     private String deviceId;
     private String recordPath;
 
+    private boolean isRecord = false;
+
     private static final String TAG = CameraService.class.getSimpleName();
-    private static final String RECORD_CHANNEL = "rtmp://119.23.28.204:1935/record";
     private static final String RTMP_CHANNEL = "rtmp://119.23.28.204:1935/live";
     private static final String END_POINT = "http://oss-cn-shenzhen.aliyuncs.com";
     private static final String ACCESS_KEY_ID = "LTAIvIhIJ3JNzkRl";
@@ -50,6 +55,8 @@ public class CameraService extends Service {
     private static final int START_RTMP = 100000;
     private static final int START_RECORD = 100001;
     private static final int UPLOAD_FILE = 100002;
+
+    private Handler handler;
 
     private Handler mHandler = new Handler() {
         public void handleMessage(Message paramMessage) {
@@ -81,17 +88,109 @@ public class CameraService extends Service {
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
+        handler = new Handler();
         recordPath = Environment.getExternalStorageDirectory().getPath();
         mHandler.sendEmptyMessage(START_RECORD);
         return super.onStartCommand(intent, flags, startId);
     }
 
+    @Override
+    public void onRecordPause() {
+        RingLog.d(TAG, "Record paused");
+    }
+
+    @Override
+    public void onRecordResume() {
+        RingLog.d(TAG, "Record resumed");
+    }
+
+    @Override
+    public void onRecordStarted(String msg) {
+        RingLog.d(TAG, "Record start");
+        // 打开计时器
+        isRecord = true;
+        startPublishRecordTimer();
+    }
+
+
+    @Override
+    public void onRecordFinished(String msg) {
+        RingLog.d(TAG, "Record finished");
+        isRecord = false;
+        RingLog.d(TAG, "Now stop record, upload it to server");
+        mHandler.sendEmptyMessage(UPLOAD_FILE);
+    }
+
+    @Override
+    public void onRecordIOException(IOException e) {
+        e.printStackTrace();
+    }
+
+    @Override
+    public void onRecordIllegalArgumentException(IllegalArgumentException e) {
+        e.printStackTrace();
+    }
+
+    @Override
+    public void onRtmpConnecting(String msg) {
+        RingLog.d(TAG, "Rtmp connecting");
+    }
+
+    @Override
+    public void onRtmpConnected(String msg) {
+        RingLog.d(TAG, "Rtmp connected");
+    }
+
+    @Override
+    public void onRtmpVideoStreaming() {}
+
+    @Override
+    public void onRtmpAudioStreaming() {}
+
+    @Override
+    public void onRtmpStopped() {
+        RingLog.d(TAG, "Rtmp has stopped");
+    }
+
+    @Override
+    public void onRtmpDisconnected() {
+        RingLog.d(TAG, "Rtmp has disconnected the server");
+    }
+
+    @Override
+    public void onRtmpVideoFpsChanged(double fps) {}
+
+    @Override
+    public void onRtmpVideoBitrateChanged(double bitrate) {}
+
+    @Override
+    public void onRtmpAudioBitrateChanged(double bitrate) {}
+
+    @Override
+    public void onRtmpSocketException(SocketException e) {
+        e.printStackTrace();
+    }
+
+    @Override
+    public void onRtmpIOException(IOException e) {
+        e.printStackTrace();
+    }
+
+    @Override
+    public void onRtmpIllegalArgumentException(IllegalArgumentException e) {
+        e.printStackTrace();
+    }
+
+    @Override
+    public void onRtmpIllegalStateException(IllegalStateException e) {
+        e.printStackTrace();
+    }
+
     private void startRtmp() {
         RingLog.d(TAG, "Open RTMP Camera");
         mPublisher.stopPublish();
-        RingLog.d(TAG, "Publish stop");
-        mPublisher.stopRecord();
-        RingLog.d(TAG, "Record stop");
+        // RTMP推流状态回调
+		mPublisher.setRtmpHandler(new RtmpHandler(this));
 
         mPublisher.switchToSoftEncoder();
         mPublisher.startCamera();
@@ -108,18 +207,13 @@ public class CameraService extends Service {
         }
 
         mPublisher = MediaPlayerActivity.mPublisher;
+        mPublisher.setRecordHandler(new SrsRecordHandler(this));
         mCamera = mPublisher.getCamera();
         if (mCamera != null) {
 			RingLog.d(TAG, "Camera Id is: " + mPublisher.getCamraId());
-			RingLog.d(TAG, "Start publish");
-            // 切换至软编码
-			mPublisher.switchToSoftEncoder();
-			String rtmpUrl = RECORD_CHANNEL + "/" + "G50234001485210002";
-			RingLog.d(TAG, "The record url is: " + rtmpUrl);
-			// 开始推流
-			mPublisher.startPublish(rtmpUrl);
-			// 打开计时器
-            startPublishRecordTimer();
+			RingLog.d(TAG, "Start record");
+            // 开始录像
+            mPublisher.startRecord(recordPath + "/" + deviceId + ".mp4");
 		}
     }
 
@@ -128,22 +222,11 @@ public class CameraService extends Service {
         mTimer.schedule(new TimerTask() {
             @Override
             public void run() {
-                if (MediaPlayerActivity.IsPublishRecord) {
-                    RingLog.d(TAG, "Now stop publish record, start publish rtmp");
-                    mHandler.sendEmptyMessage(START_RTMP);
+                if (isRecord) {
+                    mPublisher.stopRecord();
                 }
             }
         }, 60 * 1000);
-    }
-
-    private void stopCameraRecord() {
-        if (mMediaRecorder != null) {
-            mMediaRecorder.stop();
-            mMediaRecorder.reset();
-            mMediaRecorder.release();
-            mMediaRecorder = null;
-            Toast.makeText(getApplicationContext(), "MP4 file saved", Toast.LENGTH_SHORT).show();
-        }
     }
 
     private void uploadRecord() {
@@ -157,6 +240,7 @@ public class CameraService extends Service {
         OSS oss = new OSSClient(getApplicationContext(), END_POINT, credentialProvider, conf);
         RingLog.d(TAG, "OSS Init");
         uploadFile(oss);
+        RingLog.d(TAG, "Now start push rtmp");
         mHandler.sendEmptyMessage(START_RTMP);
     }
 
