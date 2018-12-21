@@ -28,6 +28,7 @@ import android.content.ComponentName;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
+import android.content.ServiceConnection;
 import android.content.res.AssetFileDescriptor;
 import android.graphics.Color;
 import android.hardware.Camera;
@@ -43,6 +44,7 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.os.Environment;
 import android.os.Handler;
+import android.os.IBinder;
 import android.os.Message;
 import android.os.PowerManager;
 import android.os.SystemClock;
@@ -89,6 +91,7 @@ import com.grandartisans.advert.model.entity.res.TemplateRegion;
 import com.grandartisans.advert.model.entity.res.TerminalAdvertPackageVo;
 import com.grandartisans.advert.model.entity.res.TimeScheduleVo;
 import com.grandartisans.advert.service.CameraService;
+import com.grandartisans.advert.service.NetworkService;
 import com.grandartisans.advert.service.UpgradeService;
 import com.grandartisans.advert.utils.AdvertVersion;
 import com.grandartisans.advert.utils.CommonUtil;
@@ -171,6 +174,8 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 	private final int ON_PAUSE_EVENT_CMD = 100014;
 	private final int SET_POWER_ALARM_CMD = 100015;
 	private final int START_OPEN_SERIALPORT = 100016;
+	private final int START_PUSH_RTMP = 100017;
+	private final int STOP_PUSH_RTMP = 100018;
 
 	private String mMode ="";
 	private String deviceId = "";
@@ -199,6 +204,8 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 	private MediaRecorder mMediaRecorder;
 	private SurfaceView mRecordView;
 	private SurfaceHolder mRecordHolder;
+	private NetworkService mNetworkService;
+	private ServiceConnection mServiceConn;
 	private boolean AccSensorEnabled = false;
 	private int mLiftState=0;
 	private int mChanging=0;
@@ -210,8 +217,10 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 	private int mDoorState = DOOR_STATE_INIT;
 
 	private int mReportEventTimeInterval=5*60*1000;
+	private int mIntentId = 0;
 
 	private boolean  activate_started = false;
+	private boolean IsNetworkServiceOn = false;
 	public static boolean IsPublishRecord = false;
 
 	private Handler mHandler = new Handler()
@@ -244,6 +253,12 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 					break;
 				case SET_POWER_ALARM_CMD:
 					SetPowerAlarm();
+					break;
+				case START_PUSH_RTMP:
+                    startPushRtmp();
+					break;
+				case STOP_PUSH_RTMP:
+                    stopPushRtmp();
 					break;
 				default:
 					break;
@@ -353,7 +368,7 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 		Log.i(TAG,"onCreate");
 		setCurrentTime();
 		keepScreenWake();
-
+		initNetworkService();
 
 
 		handler = new Handler();
@@ -365,8 +380,6 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 		initAccSensor();
 
 		initView();
-
-		initCamera();
 
 		initEventBus();//注册事件接收
 
@@ -819,6 +832,10 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 		}
 		EventBus.getDefault().unregister(this);
 		if(serialPortUtils!=null) serialPortUtils.closeSerialPort();
+		if (IsNetworkServiceOn) {
+			unbindService(mServiceConn);
+			IsNetworkServiceOn = false;
+		}
 	}
 
 	private void initTFMini() {
@@ -853,32 +870,6 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 			mSensorManager.registerListener(this, mAccSensor, 200000);
 			mInitZ = Float.valueOf(prjmanager.getGsensorDefault());
 		}
-	}
-
-	private void initCamera() {
-		mCameraView = (SrsCameraView) findViewById(R.id.glsurfaceview_camera);
-		mPublisher = new SrsPublisher(mCameraView);
-		// 编码状态回调
-		mPublisher.setEncodeHandler(new SrsEncodeHandler(this));
-		mPublisher.setRecordHandler(new SrsRecordHandler(this));
-		// RTMP推流状态回调
-		mPublisher.setRtmpHandler(new RtmpHandler(this));
-		// 预览分辨率
-		mPublisher.setPreviewResolution(1280, 720);
-		// 推流分辨率
-		mPublisher.setOutputResolution(640, 480);
-		// 传输率
-		mPublisher.setVideoSmoothMode();
-		// 将摄像头预览最小化
-        RelativeLayout.LayoutParams layoutParams = new RelativeLayout.LayoutParams(1, 1);
-        layoutParams.setMargins(0, 0, 0, 0);
-        mCameraView.setLayoutParams(layoutParams);
-		// 调整摄像头角度
-		mCameraView.setPreviewOrientation(0);
-		mPublisher.startCamera();
-
-		Intent intentService = new Intent(MediaPlayerActivity.this, CameraService.class);
-		startService(intentService);
 	}
 
 	private void startSysSetting(Context context) {
@@ -1828,6 +1819,41 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 		}
 	}
 
+	private void initCameraView() {
+		mCameraView = (SrsCameraView) findViewById(R.id.glsurfaceview_camera);
+		mPublisher = new SrsPublisher(mCameraView);
+		// 编码状态回调
+		mPublisher.setEncodeHandler(new SrsEncodeHandler(this));
+		mPublisher.setRecordHandler(new SrsRecordHandler(this));
+		// RTMP推流状态回调
+		mPublisher.setRtmpHandler(new RtmpHandler(this));
+		// 预览分辨率
+		mPublisher.setPreviewResolution(1280, 720);
+		// 推流分辨率
+		mPublisher.setOutputResolution(640, 480);
+		// 传输率
+		mPublisher.setVideoSmoothMode();
+		// 将摄像头预览最小化
+		RelativeLayout.LayoutParams layoutParams = new RelativeLayout.LayoutParams(1, 1);
+		layoutParams.setMargins(0, 0, 0, 0);
+		mCameraView.setLayoutParams(layoutParams);
+		// 调整摄像头角度
+		mCameraView.setPreviewOrientation(0);
+		mPublisher.startCamera();
+	}
+
+	private void startPushRtmp() {
+		Intent intentService = new Intent(MediaPlayerActivity.this, CameraService.class);
+		startService(intentService);
+	}
+
+	private void stopPushRtmp() {
+		if (mPublisher != null) {
+			mPublisher.stopPublish();
+			mPublisher.stopRecord();
+		}
+	}
+
     private void startCameraRecord() {
         RingLog.d(TAG, "Open Record Camera");
         String deviceId = SystemInfoManager.readFromNandkey("usid");
@@ -1915,4 +1941,45 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 	    mCamera.release();
 	    mCamera = null;
     }
+
+    private void initNetworkService() {
+		initCameraView();
+		initServiceConnection();
+		Intent intent = new Intent(MediaPlayerActivity.this, NetworkService.class);
+		startService(intent);
+		bindService(intent, mServiceConn, getApplicationContext().BIND_AUTO_CREATE);
+		IsNetworkServiceOn = true;
+	}
+
+    private void initServiceConnection() {
+		mServiceConn = new ServiceConnection() {
+			@Override
+			public void onServiceConnected(ComponentName name, IBinder service) {
+				mNetworkService = ((NetworkService.MyBinder) service).getService();
+				mNetworkService.setOnGetConnectState(new NetworkService.GetConnectState() {
+					@Override
+					public void GetState(int isConnected) {
+						if (mIntentId != isConnected) {
+							// 如果当前连接状态与广播服务返回的状态不同才进行通知显示
+							mIntentId = isConnected;
+							RingLog.d(TAG, "Current network is " + mIntentId);
+
+							if (mIntentId == 0) {
+								// 未连接
+								RingLog.d(TAG, "The network has disconnected");
+								mHandler.sendEmptyMessage(STOP_PUSH_RTMP);
+							} else if (mIntentId != 0) {
+								// 已连接
+								RingLog.d(TAG, "The network has connected");
+								mHandler.sendEmptyMessage(START_PUSH_RTMP);
+							}
+						}
+					}
+				});
+			}
+
+			@Override
+			public void onServiceDisconnected(ComponentName name) {}
+		};
+	}
 }
