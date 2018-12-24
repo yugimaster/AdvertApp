@@ -3,12 +3,10 @@ package com.grandartisans.advert.service;
 import android.app.Service;
 import android.content.Intent;
 import android.hardware.Camera;
-import android.media.MediaRecorder;
 import android.os.Environment;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Message;
-import android.widget.Toast;
 
 import com.alibaba.sdk.android.oss.ClientConfiguration;
 import com.alibaba.sdk.android.oss.ClientException;
@@ -36,11 +34,13 @@ import java.util.TimerTask;
 public class CameraService extends Service implements SrsRecordHandler.SrsRecordListener,RtmpHandler.RtmpListener {
     private SrsPublisher mPublisher;
     private Camera mCamera;
-    private MediaRecorder mMediaRecorder;
     private Timer mTimer;
 
     private String deviceId;
     private String recordPath;
+    private String mYear;
+    private String mMonth;
+    private String mDay;
 
     private boolean isRecord = false;
 
@@ -50,7 +50,7 @@ public class CameraService extends Service implements SrsRecordHandler.SrsRecord
     private static final String ACCESS_KEY_ID = "LTAIvIhIJ3JNzkRl";
     private static final String ACCESS_KEY_SECRET = "7aZBMS42QqguHTF5cq5uPD7tle8dK3";
     private static final String BUCKET_NAME = "gadsp";
-    private static final String OBJECT_KEY_DIR = "datas/soft/";
+    private static final String OBJECT_KEY_DIR = "advert/record/";
 
     private static final int START_RTMP = 100000;
     private static final int START_RECORD = 100001;
@@ -249,7 +249,7 @@ public class CameraService extends Service implements SrsRecordHandler.SrsRecord
         RingLog.d(TAG, "Upload Start");
         String date = getCurrentDate();
         String fileName = deviceId + "_" + date + ".mp4";
-        String objectKey = OBJECT_KEY_DIR + fileName;
+        String objectKey = OBJECT_KEY_DIR + mYear + "/" + mMonth + "/" + mDay + "/" + deviceId + ".mp4";
         String recordFilePath = recordPath + "/" + deviceId + ".mp4";
         RingLog.d(TAG, "File name: " + objectKey);
         PutObjectRequest put = new PutObjectRequest(BUCKET_NAME, objectKey, recordFilePath);
@@ -276,7 +276,10 @@ public class CameraService extends Service implements SrsRecordHandler.SrsRecord
         int year = calendar.get(Calendar.YEAR);
         int month = calendar.get(Calendar.MONTH) + 1;
         int day = calendar.get(Calendar.DAY_OF_MONTH);
-        date = Integer.toString(year) + getIntegerFormat(month) + getIntegerFormat(day);
+        mYear = Integer.toString(year);
+        mMonth = getIntegerFormat(month);
+        mDay = getIntegerFormat(day);
+        date = mYear + mMonth + mDay;
         return date;
     }
 
