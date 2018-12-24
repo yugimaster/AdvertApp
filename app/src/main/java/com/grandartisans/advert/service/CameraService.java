@@ -22,6 +22,7 @@ import com.grandartisans.advert.activity.MediaPlayerActivity;
 import com.grandartisans.advert.utils.SystemInfoManager;
 import com.ljy.devring.other.RingLog;
 
+import net.ossrs.yasea.SrsCameraView;
 import net.ossrs.yasea.SrsPublisher;
 import net.ossrs.yasea.SrsRecordHandler;
 
@@ -188,12 +189,16 @@ public class CameraService extends Service implements SrsRecordHandler.SrsRecord
 
     private void startRtmp() {
         RingLog.d(TAG, "Open RTMP Camera");
-        mPublisher.stopPublish();
+        SrsCameraView cameraView = MediaPlayerActivity.mCameraView;
         // RTMP推流状态回调
 		mPublisher.setRtmpHandler(new RtmpHandler(this));
 
+        // 切换摄像头
+        cameraView.stopCamera();
+        cameraView.setCameraId((mPublisher.getCamraId() + 1) % Camera.getNumberOfCameras());
+        cameraView.startCamera();
+
         mPublisher.switchToSoftEncoder();
-        mPublisher.startCamera();
         String rtmpUrl = RTMP_CHANNEL + "/" + "G50234001485210002";
         RingLog.d(TAG, "The rtmp url is: " + rtmpUrl);
         mPublisher.startPublish(rtmpUrl);
