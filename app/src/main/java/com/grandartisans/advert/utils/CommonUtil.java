@@ -329,6 +329,16 @@ public class CommonUtil {
         String device = get("ro.tfmini.device","ttyS3");
         return device.trim();
     }
+    public static int getTFMiniEnabled() {
+        String value = get("persist.sys.tfmini.enable","1");
+        int enable = Integer.valueOf(value);
+        return enable;
+    }
+    public static int getGsensorEnabled() {
+        String value = get("persist.sys.gsensor.enable","1");
+        int enable = Integer.valueOf(value);
+        return enable;
+    }
 
     public static void reboot (Context context){
         Intent intent = new Intent(Intent.ACTION_REBOOT);

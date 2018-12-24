@@ -74,6 +74,7 @@ import com.grandartisans.advert.model.entity.DownloadInfo;
 import com.grandartisans.advert.model.entity.PlayingAdvert;
 import com.grandartisans.advert.model.entity.event.AppEvent;
 import com.grandartisans.advert.model.entity.post.EventParameter;
+import com.grandartisans.advert.model.entity.post.PlayerStatusParameter;
 import com.grandartisans.advert.model.entity.post.ReportEventData;
 import com.grandartisans.advert.model.entity.post.ReportSchedueVerParameter;
 import com.grandartisans.advert.model.entity.res.AdvertFile;
@@ -121,6 +122,11 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 	private MediaPlayer mMediaPlayer;
 	private MySurfaceView surface;
 	private SurfaceHolder surfaceHolder;
+	private boolean surfaceDestroyedFlag = true;
+
+	private int surfaceDestroyedCount = 0;
+	private int mediaplayerDestroyedCount = 0;
+	private int menuKeyPressedCount = 0;
 
 	private TextView messageTV ;
 	private int playindex = 0;
@@ -173,6 +179,8 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 	private final int START_PUSH_RTMP = 100017;
 	private final int STOP_PUSH_RTMP = 100018;
 
+	private final int START_REPORT_PLAYSTATUS_CMD= 100017;
+
 	private String mMode ="";
 
 	static final float THRESHOLD = 0.2f; //0.08f;
@@ -223,6 +231,17 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 						setScreen(1);
 						if (mMediaPlayer != null)
 							mMediaPlayer.start();
+						if(surfaceDestroyedFlag) {
+							surfaceDestroyedCount +=1;
+							initView();
+							initPlayer();
+						}
+						if(mMediaPlayer==null || !mMediaPlayer.isPlaying()){
+							Log.i(TAG,"Player is error ,reset player");
+							mediaplayerDestroyedCount +=1;
+							initView();
+							initPlayer();
+						}
 					}
 					break;
 				case START_PLAYER_CMD:
@@ -248,6 +267,8 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 					break;
 				case STOP_PUSH_RTMP:
                     stopPushRtmp();
+				case START_REPORT_PLAYSTATUS_CMD:
+					ReportPlayStatus();
 					break;
 				default:
 					break;
@@ -368,8 +389,6 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 
 		initAccSensor();
 
-		initView();
-
 		initEventBus();//注册事件接收
 
 		initTFMini();//初始化激光测距模块
@@ -409,6 +428,7 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
         };
 		pClient = new PicoClient(mPicoOnEventListener, null);
 
+		//mHandler.sendEmptyMessage(START_REPORT_PLAYSTATUS_CMD);
 	}
 
 	private void initView(){
@@ -516,6 +536,7 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 		savePlayRecord();
 		if(!isPowerOff) {
 			mMediaPlayer.reset();
+			//mMediaPlayer.stop();
 			playindex++;
 			String url = getValidUrl();
 			Log.i(TAG,"onVideoPlayCompleted validurl  =  " + url);
@@ -537,6 +558,7 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 	public void surfaceCreated(SurfaceHolder arg0) {
 		//然后初始化播放手段视频的player对象
 		//initPlayer();
+		surfaceDestroyedFlag = false;
 		CommonUtil.setScreenVideoMode("1");
 		String status = DevRing.cacheManager().spCache("PowerStatus").getString("status","on");
 		if(status.equals("off")){
@@ -563,6 +585,7 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 	public void surfaceDestroyed(SurfaceHolder arg0) {
 		// TODO 自动生成的方法存根
 		Log.i(TAG,"surfaceDestroyed");
+		surfaceDestroyedFlag = true;
         onPauseEvent();
 	}
 	@Override
@@ -600,7 +623,10 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 		if(mMediaPlayer!=null) {
 			Log.i(TAG,"Stop mMediaPlayer");
 			mMediaPlayer.stop();
+			mMediaPlayer.release();
 		}
+		surface = null;
+		surfaceHolder = null;
 		/*
 		if(AccSensorEnabled) {
 			mSensorManager.unregisterListener(this);
@@ -612,7 +638,7 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 	protected void onResume() {
 		super.onResume();
 		Log.i(TAG,"onResume");
-
+		initView();
 
 	}
 	private void openSerialPort(){
@@ -669,7 +695,7 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 				}
 			}
         }else if(keyCode == KeyEvent.KEYCODE_MENU) {
-
+			menuKeyPressedCount +=1;
 			startSysSetting(MediaPlayerActivity.this);
 		}else if(keyCode == KeyEvent.KEYCODE_BACK || keyCode == KeyEvent.KEYCODE_BACKSLASH){
 			return true;
@@ -908,6 +934,7 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 			@Override
 			public void onDataReceive(byte[] buffer, int size) {
 				//Log.i(TAG, "进入数据监听事件中。。。" + new String(buffer));
+				if(CommonUtil.getTFMiniEnabled()==0) return;
 				dealWithData(buffer,size);
 				if(serialPortUtils.serialPortStatus) {
 					//handler.post(ReadThread);
@@ -1081,6 +1108,54 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 			mHandler.sendEmptyMessageDelayed(START_REPORT_EVENT_CMD,mReportEventTimeInterval);
 		}
 
+	}
+
+	private void ReportPlayStatus () {
+		EventParameter parameter = new EventParameter();
+		parameter.setSn(SystemInfoManager.readFromNandkey("usid").toUpperCase());
+		parameter.setSessionid(CommonUtil.getRandomString(50));
+		parameter.setTimestamp(System.currentTimeMillis());
+		parameter.setToken(UpgradeService.mToken);
+		parameter.setApp(Utils.getAppPackageName(MediaPlayerActivity.this));
+		parameter.setEvent("playStatus");
+		parameter.setEventtype(0000);
+
+		parameter.setMac(CommonUtil.getEthernetMac());
+
+		PlayerStatusParameter eventData = new PlayerStatusParameter();
+		if(mMediaPlayer!=null) {
+			eventData.setPlayerHandler(true);
+			eventData.setPlaying(mMediaPlayer.isPlaying());
+		}
+		else {
+			eventData.setPlayerHandler(false);
+			eventData.setPlaying(false);
+		}
+		eventData.setSurfaceDestroyedFlag(surfaceDestroyedFlag);
+		eventData.setgSensorDefaultValue(mInitZ);
+		eventData.setGtfminiDefaultValue(threshold_distance);
+		eventData.setMediaplayerDestroyedCount(mediaplayerDestroyedCount);
+		eventData.setSurfaceDestroyedCount(surfaceDestroyedCount);
+		eventData.setMenukeyPressedCount(menuKeyPressedCount);
+		parameter.setEventData(eventData);
+		//parameter.setIp();
+		parameter.setTimestamp(System.currentTimeMillis());
+		AdvertModel mIModel = new AdvertModel();
+
+		DevRing.httpManager().commonRequest(mIModel.reportEvent(parameter), new CommonObserver<ReportInfoResult>() {
+			@Override
+			public void onResult(ReportInfoResult result) {
+				RingLog.d("reportPlayer  status ok = " + result.getStatus() );
+			}
+
+			@Override
+			public void onError(int i, String s) {
+				RingLog.d("reportPlayer error i = " + i + "msg = " + s );
+			}
+		},null);
+
+		mHandler.removeMessages(START_REPORT_PLAYSTATUS_CMD);
+		mHandler.sendEmptyMessageDelayed(START_REPORT_PLAYSTATUS_CMD,mReportEventTimeInterval);
 	}
 
 	private void ReportScheduleVer()
@@ -1532,6 +1607,10 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 			// " X Y Z: " + acc_x + " " + acc_y + " " + acc_z);
 			//Log.i(TAG,"state: " + mLiftState  + "acc_z = " + acc);
             //LogToFile.i(TAG,"state: " + mLiftState  + "acc_z = " + acc);
+			if(CommonUtil.getGsensorEnabled()==0){
+				setLiftState(LIFT_STATE_INIT);
+				return;
+			}
 			switch (mLiftState) {
 				case LIFT_STATE_INIT:
 					//setLiftState(LIFT_STATE_STOP);
