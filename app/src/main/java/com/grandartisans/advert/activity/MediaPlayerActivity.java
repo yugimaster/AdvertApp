@@ -10,6 +10,8 @@ import java.util.Calendar;
 import java.util.Date;
 import java.util.List;
 import java.util.TimeZone;
+import java.util.Timer;
+import java.util.TimerTask;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -179,7 +181,9 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 	private final int START_PUSH_RTMP = 100017;
 	private final int STOP_PUSH_RTMP = 100018;
 
-	private final int START_REPORT_PLAYSTATUS_CMD= 100017;
+	private final int START_REPORT_PLAYSTATUS_CMD= 100019;
+
+	private final int START_CAMERA_SERVICE_CMD = 100020;
 
 	private String mMode ="";
 
@@ -201,6 +205,7 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 	private Sensor mAccSensor;
 	public static SrsCameraView mCameraView;
 	public static SrsPublisher mPublisher;
+	private Timer mCheckTimer;
 	private NetworkService mNetworkService;
 	private ServiceConnection mServiceConn;
 	private boolean AccSensorEnabled = false;
@@ -218,7 +223,6 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 
 	private boolean  activate_started = false;
 	private boolean IsNetworkServiceOn = false;
-	public static boolean IsPublishRecord = false;
 
 	private Handler mHandler = new Handler()
 	{
@@ -269,6 +273,9 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
                     stopPushRtmp();
 				case START_REPORT_PLAYSTATUS_CMD:
 					ReportPlayStatus();
+					break;
+				case START_CAMERA_SERVICE_CMD:
+					initNetworkService();
 					break;
 				default:
 					break;
@@ -378,7 +385,7 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 		Log.i(TAG,"onCreate");
 		setCurrentTime();
 		keepScreenWake();
-		initNetworkService();
+		checkCamera();
 
 
 		handler = new Handler();
@@ -1789,9 +1796,34 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 				break;
 		}
 	}
+	private void checkCamera() {
+		// 初始化CameraView 并设置为不可见
+		mCameraView = (SrsCameraView) findViewById(R.id.glsurfaceview_camera);
+		mCameraView.setVisibility(View.GONE);
+		startCheckCameraTimer();
+	}
+
+	private void startCheckCameraTimer() {
+		mCheckTimer = new Timer();
+		mCheckTimer.schedule(new TimerTask() {
+			@Override
+			public void run() {
+				int num = Camera.getNumberOfCameras();
+				RingLog.d(TAG, "Camera numbers is " + num);
+				if (num != 0) {
+                    RingLog.d(TAG, "Camera is on");
+                    mCheckTimer.cancel();
+                    mHandler.sendEmptyMessageDelayed(START_CAMERA_SERVICE_CMD, 1000);
+                } else {
+                    RingLog.d(TAG, "None camera");
+                }
+			}
+		}, 0, 5 * 1000);
+	}
 
 	private void initCameraView() {
-		mCameraView = (SrsCameraView) findViewById(R.id.glsurfaceview_camera);
+		// 初始化相机并打开
+		mCameraView.setVisibility(View.VISIBLE);
 		mPublisher = new SrsPublisher(mCameraView);
 		// 编码状态回调
 		mPublisher.setEncodeHandler(new SrsEncodeHandler(this));
