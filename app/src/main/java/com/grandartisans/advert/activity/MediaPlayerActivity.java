@@ -1830,9 +1830,9 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 		// 预览分辨率
 		mPublisher.setPreviewResolution(1280, 720);
 		// 推流分辨率
-		mPublisher.setOutputResolution(640, 480);
+		mPublisher.setOutputResolution(1280, 720);
 		// 传输率
-		mPublisher.setVideoSmoothMode();
+		mPublisher.setVideoHDMode();
 		// 将摄像头预览最小化
 		RelativeLayout.LayoutParams layoutParams = new RelativeLayout.LayoutParams(1, 1);
 		layoutParams.setMargins(0, 0, 0, 0);
