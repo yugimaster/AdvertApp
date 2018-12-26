@@ -858,6 +858,9 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 			unbindService(mServiceConn);
 			IsNetworkServiceOn = false;
 		}
+		if (mPublisher != null) {
+			mPublisher.stopPublish();
+		}
 	}
 
 	private void initTFMini() {
