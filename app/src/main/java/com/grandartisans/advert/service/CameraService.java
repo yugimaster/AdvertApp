@@ -214,7 +214,6 @@ public class CameraService extends Service implements SrsRecordHandler.SrsRecord
         mPublisher.setRecordHandler(new SrsRecordHandler(this));
         mCamera = mPublisher.getCamera();
         if (mCamera != null) {
-            setRecordCamera();
             RingLog.d(TAG, "Camera Id is: " + mPublisher.getCamraId());
             RingLog.d(TAG, "Start record");
             // 开始录像
@@ -295,21 +294,5 @@ public class CameraService extends Service implements SrsRecordHandler.SrsRecord
         else
             str = Integer.toString(integer);
         return str;
-    }
-
-    private void setRecordCamera() {
-        SrsCameraView cameraView = MediaPlayerActivity.mCameraView;
-        int cameraId = -1;
-        try {
-            cameraId = mPublisher.getCamraId();
-        } catch (Exception e) {
-            cameraId = 0;
-        }
-        if (cameraId == 1) {
-            RingLog.d(TAG, "Switch camera");
-            cameraView.stopCamera();
-            cameraView.setCameraId((cameraId + 1) % Camera.getNumberOfCameras());
-            cameraView.startCamera();
-        }
     }
 }
