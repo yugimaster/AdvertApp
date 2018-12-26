@@ -574,7 +574,7 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
         onResumeEvent();
 		if(activate_started == false) {
 			mHandler.sendEmptyMessageDelayed(START_PLAYER_CMD, 3 * 1000);
-			if(mMode.equals("GAPEDS4A4")) {
+			if(mMode.equals("GAPEDS4A4") || mMode.equals("GAPEDS4A6")) {
 				mHandler.sendEmptyMessageDelayed(START_OPEN_SERIALPORT, 5 * 1000);
 			}else{
 				openSerialPort();
@@ -620,7 +620,7 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 		Log.i(TAG,"onPauseEvent");
 		mHandler.removeMessages(START_PLAYER_CMD);
 
-		if(mMode.equals("GAPEDS4A4")) {
+		if(mMode.equals("GAPEDS4A4") || mMode.equals("GAPEDS4A6")) {
 			mHandler.removeMessages(START_OPEN_SERIALPORT);
 		}
 
@@ -891,7 +891,7 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 
 		mSensorManager = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
 		mAccSensor = mSensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
-		if(mMode.equals("GAPEDS4A2")||mMode.equals("GAPEDS4A4")){
+		if(mMode.equals("GAPEDS4A2")||mMode.equals("GAPEDS4A4") || mMode.equals("GAPEDS4A6")){
 			AccSensorEnabled = true;
 			mInitZ =  Float.valueOf(prjmanager.getGsensorDefault());
 		}
@@ -1828,7 +1828,7 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
                     RingLog.d(TAG, "None camera");
                 }
 			}
-		}, 0, 5 * 1000);
+		}, 6000, 5 * 1000);
 	}
 
 	private void initCameraView() {
