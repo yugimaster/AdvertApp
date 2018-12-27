@@ -120,14 +120,12 @@ public class CameraService extends Service implements SrsRecordHandler.SrsRecord
     public void onRecordFinished(String msg) {
         RingLog.d(TAG, "Record finished");
         isRecord = false;
-        if (!cameraNeedStop) {
-            RingLog.d(TAG, "Now stop record, upload it to server");
-            mHandler.sendEmptyMessage(UPLOAD_FILE);
-        } else {
+        if (cameraNeedStop){
             RingLog.d(TAG, "Record is forced to stop");
             mTimer.cancel();
-            cameraNeedStop = false;
         }
+        RingLog.d(TAG, "Now stop record, upload it to server");
+        mHandler.sendEmptyMessage(UPLOAD_FILE);
     }
 
     @Override
@@ -253,8 +251,13 @@ public class CameraService extends Service implements SrsRecordHandler.SrsRecord
         RingLog.d(TAG, "OSS Init");
         uploadFile(oss);
         if(CommonUtil.getModel().equals("GAPEDS4A3")) {
-            RingLog.d(TAG, "Now start push rtmp");
-            mHandler.sendEmptyMessage(START_RTMP);
+            if (!cameraNeedStop) {
+                RingLog.d(TAG, "Now start push rtmp");
+                mHandler.sendEmptyMessage(START_RTMP);
+            } else {
+                RingLog.d(TAG, "Don't push rtmp");
+                cameraNeedStop = false;
+            }
         }
     }
 

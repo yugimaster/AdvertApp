@@ -605,7 +605,8 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 		Log.i(TAG,"onPause");
 
 		//mHandler.sendEmptyMessageDelayed(ON_PAUSE_EVENT_CMD,1000);
-
+		CameraService.cameraNeedStop = true;
+		stopPushRtmp();
 	}
 	private void onPauseEvent(){
 		Log.i(TAG,"onPauseEvent");
