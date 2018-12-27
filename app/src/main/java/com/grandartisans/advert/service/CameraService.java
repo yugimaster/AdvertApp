@@ -44,6 +44,7 @@ public class CameraService extends Service implements SrsRecordHandler.SrsRecord
     private String mDay;
 
     private boolean isRecord = false;
+    public static boolean cameraNeedStop = false;
 
     private static final String TAG = CameraService.class.getSimpleName();
     private static final String RTMP_CHANNEL = "rtmp://119.23.28.204:1935/live";
@@ -118,8 +119,14 @@ public class CameraService extends Service implements SrsRecordHandler.SrsRecord
     public void onRecordFinished(String msg) {
         RingLog.d(TAG, "Record finished");
         isRecord = false;
-        RingLog.d(TAG, "Now stop record, upload it to server");
-        mHandler.sendEmptyMessage(UPLOAD_FILE);
+        if (!cameraNeedStop) {
+            RingLog.d(TAG, "Now stop record, upload it to server");
+            mHandler.sendEmptyMessage(UPLOAD_FILE);
+        } else {
+            RingLog.d(TAG, "Record is forced to stop");
+            mTimer.cancel();
+            cameraNeedStop = false;
+        }
     }
 
     @Override

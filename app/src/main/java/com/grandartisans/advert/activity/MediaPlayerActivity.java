@@ -663,6 +663,12 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 		if(AccSensorEnabled) {
 			mInitZ = Float.valueOf(prjmanager.getGsensorDefault());
 		}
+		if (IsNetworkServiceOn) {
+			unbindService(mServiceConn);
+			IsNetworkServiceOn = false;
+		}
+		CameraService.cameraNeedStop = true;
+		stopPushRtmp();
 	}
 	@Override
 	public boolean onKeyDown(int keyCode, KeyEvent event) {
@@ -858,9 +864,8 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 			unbindService(mServiceConn);
 			IsNetworkServiceOn = false;
 		}
-		if (mPublisher != null) {
-			mPublisher.stopPublish();
-		}
+		CameraService.cameraNeedStop = true;
+		stopPushRtmp();
 	}
 
 	private void initTFMini() {
