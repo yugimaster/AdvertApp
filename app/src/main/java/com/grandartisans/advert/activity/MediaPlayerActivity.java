@@ -634,6 +634,12 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 		}
 		surface = null;
 		surfaceHolder = null;
+		if (IsNetworkServiceOn) {
+			unbindService(mServiceConn);
+			IsNetworkServiceOn = false;
+		}
+		CameraService.cameraNeedStop = true;
+		stopPushRtmp();
 		/*
 		if(AccSensorEnabled) {
 			mSensorManager.unregisterListener(this);
@@ -663,12 +669,7 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 		if(AccSensorEnabled) {
 			mInitZ = Float.valueOf(prjmanager.getGsensorDefault());
 		}
-		if (IsNetworkServiceOn) {
-			unbindService(mServiceConn);
-			IsNetworkServiceOn = false;
-		}
-		CameraService.cameraNeedStop = true;
-		stopPushRtmp();
+
 	}
 	@Override
 	public boolean onKeyDown(int keyCode, KeyEvent event) {
@@ -865,6 +866,7 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 			IsNetworkServiceOn = false;
 		}
 		CameraService.cameraNeedStop = true;
+
 		stopPushRtmp();
 	}
 
