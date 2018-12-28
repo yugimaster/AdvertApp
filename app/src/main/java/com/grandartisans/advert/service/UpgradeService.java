@@ -9,6 +9,7 @@ import android.net.TrafficStats;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Message;
+import android.os.SystemClock;
 import android.telephony.PhoneStateListener;
 import android.telephony.SignalStrength;
 import android.telephony.TelephonyManager;
@@ -486,7 +487,7 @@ public class UpgradeService extends Service {
                     appUpgrade(getApplicationContext());
                     break;
                 case  GETTOKEN_CMD:
-                    getToken();
+                    getToken(false);
                     break;
                 case UPGRADE_APP_ON_USB_CMD:
                     updateAppOnUsb();
@@ -515,7 +516,7 @@ public class UpgradeService extends Service {
     public int onStartCommand(Intent intent, int flags, int startId) {
         initUSB(getApplicationContext());
         appUpgrade(getApplicationContext());
-        getToken();
+        getToken(false);
         mHandler.sendEmptyMessageDelayed(SHOW_TIME_INFO_CMD,3*1000);
         return super.onStartCommand(intent, flags, startId);
     }
@@ -608,13 +609,17 @@ public class UpgradeService extends Service {
         },null);
     }
 
-    private void getToken() {
+    private void getToken(boolean expired) {
         String signed="";
         AdvertModel mIModel = new AdvertModel();
         TokenParameter tokenParameter = new TokenParameter();
         tokenParameter.setDeviceClientid(SystemInfoManager.readFromNandkey("usid").toUpperCase());
-        tokenParameter.setTimestamp(System.currentTimeMillis());
-
+        tokenParameter.setTimestamp(System.currentTimeMillis() - SystemClock.elapsedRealtime());
+        if(expired==true){
+            tokenParameter.setRqeuestUuid("true");
+        }else {
+            tokenParameter.setRqeuestUuid("false");
+        }
         UserAgent useragent = new UserAgent();
         String version = Utils.getAppVersionName(getApplicationContext(),"com.tofu.locationinfo");
         if(version.equals("30")){
@@ -823,7 +828,7 @@ public class UpgradeService extends Service {
                         mHandler.sendEmptyMessageDelayed(HEART_BEAT_CMD, HEART_BEAT_INTERVAL_TIME);
                     }else if(result.getStatus()==9800) { // token 已过期 ，重新获取
                         mHandler.removeMessages(HEART_BEAT_CMD);
-                        getToken();
+                        getToken(true);
                     }else{
                         mHandler.sendEmptyMessageDelayed(HEART_BEAT_CMD, HEART_BEAT_INTERVAL_TIME);
                     }
