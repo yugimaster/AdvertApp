@@ -19,6 +19,7 @@ import com.alibaba.sdk.android.oss.model.PutObjectRequest;
 import com.alibaba.sdk.android.oss.model.PutObjectResult;
 import com.github.faucamp.simplertmp.RtmpHandler;
 import com.grandartisans.advert.activity.MediaPlayerActivity;
+import com.grandartisans.advert.utils.CommonUtil;
 import com.grandartisans.advert.utils.SystemInfoManager;
 import com.ljy.devring.other.RingLog;
 
@@ -251,8 +252,10 @@ public class CameraService extends Service implements SrsRecordHandler.SrsRecord
         OSS oss = new OSSClient(getApplicationContext(), END_POINT, credentialProvider, conf);
         RingLog.d(TAG, "OSS Init");
         uploadFile(oss);
-        RingLog.d(TAG, "Now start push rtmp");
-        mHandler.sendEmptyMessage(START_RTMP);
+        if(CommonUtil.getModel().equals("GAPEDS4A6")) {
+            RingLog.d(TAG, "Now start push rtmp");
+            mHandler.sendEmptyMessage(START_RTMP);
+        }
     }
 
     private void uploadFile(OSS oss) {
