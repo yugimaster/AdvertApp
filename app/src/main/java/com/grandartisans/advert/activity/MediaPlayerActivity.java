@@ -982,15 +982,15 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 									if(getScreenStatus()!=0) {
 										Log.i(TAG, "threshold_distance= " + threshold_distance + "distance = " + distance + "setscreen off");
                                         //LogToFile.i(TAG,"threshold_distance= " + threshold_distance + "distance = " + distance + "setscreen off");
-										if(mLiftState!=LIFT_STATE_INIT) {
-											setLiftState(LIFT_STATE_STOP);
-										}
 										setScreen(0);
 										if (mMediaPlayer != null && mMediaPlayer.isPlaying()) {
 											mMediaPlayer.pause();
 										}
 									}
                                 }
+                                if(mLiftState!=LIFT_STATE_INIT) {
+									setLiftState(LIFT_STATE_STOP);
+								}
                             } else {
 								//if(mDoorState!=DOOR_STATE_CLOSED) {
 									//mDoorState = DOOR_STATE_CLOSED;
