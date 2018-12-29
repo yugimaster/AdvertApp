@@ -185,6 +185,8 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 
 	private final int START_CAMERA_SERVICE_CMD = 100020;
 
+	private final int SET_LIFT_STOP_CMD = 100021;
+
 	private String mMode ="";
 
 	static final float THRESHOLD = 0.2f; //0.08f;
@@ -231,22 +233,8 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 			switch (paramMessage.what)
 			{
 				case SET_SCREEN_ON_CMD:
-					if(getScreenStatus()!=1 ) {
-						setScreen(1);
-						if (mMediaPlayer != null)
-							mMediaPlayer.start();
-						if(surfaceDestroyedFlag) {
-							surfaceDestroyedCount +=1;
-							initView();
-							initPlayer();
-						}
-						if(mMediaPlayer==null || !mMediaPlayer.isPlaying()){
-							Log.i(TAG,"Player is error ,reset player");
-							mediaplayerDestroyedCount +=1;
-							initView();
-							initPlayer();
-						}
-					}
+					setScreenOn();
+					//mHandler.sendEmptyMessageDelayed(SET_LIFT_STOP_CMD,1000*60*1);
 					break;
 				case START_PLAYER_CMD:
 					initPlayer();
@@ -277,6 +265,9 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 				case START_CAMERA_SERVICE_CMD:
 					initNetworkService();
 					break;
+				case SET_LIFT_STOP_CMD:
+					setScreenOff();
+					setLiftState(LIFT_STATE_STOP);
 				default:
 					break;
 			}
@@ -347,12 +338,7 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
             lock.lock();
             if(isPowerOff==false) {
 				isPowerOff = true;
-
-				if (mMediaPlayer != null && mMediaPlayer.isPlaying()) {
-					mMediaPlayer.pause();
-				}
-				setScreen(0);
-
+				setScreenOff();
 				mHandler.sendEmptyMessageDelayed(START_REPORT_EVENT_CMD,mReportEventTimeInterval);
 			}
             lock.unlock();
@@ -986,28 +972,19 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
                         		//if(mDoorState!=DOOR_STATE_OPENED) mDoorState = DOOR_STATE_OPENED;
                                 if (screenStatus == 1 || screenStatus ==2) {
 									mHandler.removeMessages(SET_SCREEN_ON_CMD);
-									if(getScreenStatus()!=0) {
-										Log.i(TAG, "threshold_distance= " + threshold_distance + "distance = " + distance + "setscreen off");
-                                        //LogToFile.i(TAG,"threshold_distance= " + threshold_distance + "distance = " + distance + "setscreen off");
-										setScreen(0);
-										if (mMediaPlayer != null && mMediaPlayer.isPlaying()) {
-											mMediaPlayer.pause();
-										}
-									}
+									setScreenOff();
                                 }
                                 if(mLiftState!=LIFT_STATE_INIT) {
 									setLiftState(LIFT_STATE_STOP);
 								}
                             } else {
-								//if(mDoorState!=DOOR_STATE_CLOSED) {
-									//mDoorState = DOOR_STATE_CLOSED;
-									if ((mLiftState == LIFT_STATE_INIT ||mLiftState == LIFT_STATE_UP ||mLiftState==LIFT_STATE_DOWN) && screenStatus == 0) {
-										screenStatus = 2;
-										Log.i(TAG, "threshold_distance= " + threshold_distance + "distance = " + distance + "setscreen on");
-                                        //LogToFile.i(TAG,"threshold_distance= " + threshold_distance + "distance = " + distance + "setscreen on");
-										mHandler.sendEmptyMessageDelayed(SET_SCREEN_ON_CMD, 1000);
-									}
-								//}
+                            	//if( screenStatus == 0 && mLiftState==LIFT_STATE_INIT) {
+								if ((mLiftState == LIFT_STATE_INIT ||mLiftState== LIFT_STATE_UP ||mLiftState==LIFT_STATE_DOWN) && screenStatus == 0) {
+                            		screenStatus = 2;
+                            		Log.i(TAG, "threshold_distance= " + threshold_distance + "distance = " + distance + "setscreen on");
+                            		//LogToFile.i(TAG,"threshold_distance= " + threshold_distance + "distance = " + distance + "setscreen on");
+									mHandler.sendEmptyMessageDelayed(SET_SCREEN_ON_CMD, 1000);
+                            	}
                             }
                         }
                     }
@@ -1413,6 +1390,34 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 		prjmanager.setScreen(enable);
 	}
 
+	private void setScreenOff(){
+		if (getScreenStatus() != 0) {
+			setScreen(0);
+			if (mMediaPlayer != null && mMediaPlayer.isPlaying()) {
+				mMediaPlayer.pause();
+			}
+		}
+	}
+	private void setScreenOn() {
+		if(getScreenStatus()!=1 ) {
+			setScreen(1);
+			if (mMediaPlayer != null)
+				mMediaPlayer.start();
+			if(surfaceDestroyedFlag) {
+				surfaceDestroyedCount +=1;
+				initView();
+				initPlayer();
+			}
+			if(mMediaPlayer==null || !mMediaPlayer.isPlaying()){
+				Log.i(TAG,"Player is error ,reset player");
+				mediaplayerDestroyedCount +=1;
+				initView();
+				initPlayer();
+			}
+		}
+	}
+
+
 	private void  test()
 	{
 		for(int i=0;i<=255;i++) {
@@ -1771,42 +1776,20 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 				break;
 			case LIFT_STATE_STOP:
 			    if(CommonUtil.isForeground(MediaPlayerActivity.this,"com.grandartisans.advert.activity.MediaPlayerActivity")) {
-                    if (getScreenStatus() != 0) {
-                        setScreen(0);
-                        if (mMediaPlayer != null && mMediaPlayer.isPlaying()) {
-                            mMediaPlayer.pause();
-                        }
-                    }
+                    setScreenOff();
                 }
 				break;
 			case LIFT_STATE_UP:
-				/*
-				if(getScreenStatus()!=1) {
-					setScreen(1);
-					if (mMediaPlayer != null)
-						mMediaPlayer.start();
-				}
-				*/
+				//setScreenOn();
 				break;
 			case LIFT_STATE_DOWN:
-				/*
-				if(getScreenStatus()!=1) {
-					setScreen(1);
-					if (mMediaPlayer != null)
-						mMediaPlayer.start();
-				}
-				*/
+				//setScreenOn();
 				break;
 			//case LIFT_STATE_DOWN_WAITING_STOP:
 			//case LIFT_STATE_UP_WAITING_STOP:
 			case LIFT_STATE_PRE_STOP:
                 if(CommonUtil.isForeground(MediaPlayerActivity.this,"com.grandartisans.advert.activity.MediaPlayerActivity")) {
-                    if (getScreenStatus() != 0) {
-                        setScreen(0);
-                        if (mMediaPlayer != null && mMediaPlayer.isPlaying()) {
-                            mMediaPlayer.pause();
-                        }
-                    }
+                    setScreenOff();
                 }
 				break;
 			default:
