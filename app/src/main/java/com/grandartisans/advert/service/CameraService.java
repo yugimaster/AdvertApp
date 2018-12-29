@@ -252,7 +252,7 @@ public class CameraService extends Service implements SrsRecordHandler.SrsRecord
         OSS oss = new OSSClient(getApplicationContext(), END_POINT, credentialProvider, conf);
         RingLog.d(TAG, "OSS Init");
         uploadFile(oss);
-        if(CommonUtil.getModel().equals("GAPEDS4A6")) {
+        if(CommonUtil.getModel().equals("GAPEDS4A3")) {
             RingLog.d(TAG, "Now start push rtmp");
             mHandler.sendEmptyMessage(START_RTMP);
         }

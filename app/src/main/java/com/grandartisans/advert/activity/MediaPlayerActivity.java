@@ -385,7 +385,7 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 		Log.i(TAG,"onCreate");
 		setCurrentTime();
 		keepScreenWake();
-		checkCamera();
+
 
 
 		handler = new Handler();
@@ -393,6 +393,10 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 		prjmanager = PrjSettingsManager.getInstance(this);
 
 		mMode = CommonUtil.getModel();
+
+		if(mMode.equals("GAPADS4A1") || mMode.equals("GAPEDS4A3")){
+			checkCamera();
+		}
 
 		initAccSensor();
 
@@ -574,7 +578,8 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
         onResumeEvent();
 		if(activate_started == false) {
 			mHandler.sendEmptyMessageDelayed(START_PLAYER_CMD, 3 * 1000);
-			if(mMode.equals("GAPEDS4A4") || mMode.equals("GAPEDS4A6")) {
+			if(mMode.equals("GAPEDS4A4") || mMode.equals("GAPEDS4A6")||
+					mMode.equals("GAPADS4A1") || mMode.equals("GAPADS4A2") || mMode.equals("GAPEDS4A3")) {
 				mHandler.sendEmptyMessageDelayed(START_OPEN_SERIALPORT, 5 * 1000);
 			}else{
 				openSerialPort();
@@ -620,7 +625,8 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 		Log.i(TAG,"onPauseEvent");
 		mHandler.removeMessages(START_PLAYER_CMD);
 
-		if(mMode.equals("GAPEDS4A4") || mMode.equals("GAPEDS4A6")) {
+		if(mMode.equals("GAPEDS4A4") || mMode.equals("GAPEDS4A6")||
+				mMode.equals("GAPADS4A1") || mMode.equals("GAPADS4A2") || mMode.equals("GAPEDS4A3")) {
 			mHandler.removeMessages(START_OPEN_SERIALPORT);
 		}
 
@@ -891,7 +897,8 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 
 		mSensorManager = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
 		mAccSensor = mSensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
-		if(mMode.equals("GAPEDS4A2")||mMode.equals("GAPEDS4A4") || mMode.equals("GAPEDS4A6")){
+		if(mMode.equals("GAPEDS4A2")||mMode.equals("GAPEDS4A4") || mMode.equals("GAPEDS4A6")||
+				mMode.equals("GAPADS4A1") || mMode.equals("GAPADS4A2") || mMode.equals("GAPEDS4A3")){
 			AccSensorEnabled = true;
 			mInitZ =  Float.valueOf(prjmanager.getGsensorDefault());
 		}
