@@ -3,6 +3,7 @@ package com.grandartisans.advert.service;
 import android.app.Service;
 import android.content.Intent;
 import android.hardware.Camera;
+import android.os.Binder;
 import android.os.Environment;
 import android.os.Handler;
 import android.os.IBinder;
@@ -37,6 +38,7 @@ public class CameraService extends Service implements SrsRecordHandler.SrsRecord
     private SrsPublisher mPublisher;
     private Camera mCamera;
     private Timer mTimer;
+    private TimerTask mTimerTask;
 
     private String deviceId;
     private String recordPath;
@@ -44,7 +46,10 @@ public class CameraService extends Service implements SrsRecordHandler.SrsRecord
     private String mMonth;
     private String mDay;
 
+    private int mTimerCount = 0;
+
     private boolean isRecord = false;
+    private boolean recordHasFinished = false;
     public static boolean cameraNeedStop = false;
 
     private static final String TAG = CameraService.class.getSimpleName();
@@ -59,6 +64,7 @@ public class CameraService extends Service implements SrsRecordHandler.SrsRecord
     private static final int START_RECORD = 100001;
     private static final int UPLOAD_FILE = 100002;
 
+    private CamBinder mCamBinder = new CamBinder();
     private Handler handler;
 
     private Handler mHandler = new Handler() {
@@ -78,10 +84,12 @@ public class CameraService extends Service implements SrsRecordHandler.SrsRecord
         }
     };
 
+    public CameraService () {}
+
     @Override
     public IBinder onBind(Intent intent) {
         // TODO: Return the communication channel to the service.
-        throw new UnsupportedOperationException("Not yet implemented");
+        return this.mCamBinder;
     }
 
     @Override
@@ -100,11 +108,15 @@ public class CameraService extends Service implements SrsRecordHandler.SrsRecord
     @Override
     public void onRecordPause() {
         RingLog.d(TAG, "Record paused");
+        mTimer.cancel();
+        isRecord = false;
     }
 
     @Override
     public void onRecordResume() {
         RingLog.d(TAG, "Record resumed");
+        isRecord = true;
+        startPublishRecordTimer();
     }
 
     @Override
@@ -122,9 +134,10 @@ public class CameraService extends Service implements SrsRecordHandler.SrsRecord
         isRecord = false;
         if (cameraNeedStop){
             RingLog.d(TAG, "Record is forced to stop");
-            mTimer.cancel();
+            destroyTimer();
         }
         RingLog.d(TAG, "Now stop record, upload it to server");
+        mTimerCount = 0;
         mHandler.sendEmptyMessage(UPLOAD_FILE);
     }
 
@@ -193,6 +206,30 @@ public class CameraService extends Service implements SrsRecordHandler.SrsRecord
         e.printStackTrace();
     }
 
+    public class CamBinder extends Binder {
+        public CameraService getService() {
+            return CameraService.this;
+        }
+    }
+
+    public void restartCameraRecord() {
+        if (recordHasFinished) {
+            RingLog.d(TAG, "Not need record any more");
+            return;
+        }
+        RingLog.d(TAG, "Restart record");
+        mPublisher.startCamera();
+        if (mPublisher.getCamera() != null) {
+            RingLog.d(TAG, "Restart now");
+            // 重新开始录像
+            mPublisher.startRecord(recordPath + "/" + deviceId + ".mp4");
+        }
+    }
+
+    public boolean getRecordStatus() {
+        return isRecord;
+    }
+
     private void startRtmp() {
         RingLog.d(TAG, "Open RTMP Camera");
         SrsCameraView cameraView = MediaPlayerActivity.mCameraView;
@@ -228,15 +265,41 @@ public class CameraService extends Service implements SrsRecordHandler.SrsRecord
     }
 
     private void startPublishRecordTimer() {
-        mTimer = new Timer();
-        mTimer.schedule(new TimerTask() {
+        destroyTimer();
+        initTimer();
+        mTimer.schedule(mTimerTask, 0, 1000);
+    }
+
+    /**
+     * 初始化Timer
+     */
+    private void initTimer() {
+        mTimerTask = new TimerTask() {
             @Override
             public void run() {
-                if (isRecord) {
+                if (isRecord && mTimerCount > 60) {
+                    // 已录制一分钟 停止录像
                     mPublisher.stopRecord();
+                    return;
                 }
+                mTimerCount += 1;
             }
-        }, 60 * 1000);
+        };
+        mTimer = new Timer();
+    }
+
+    /**
+     * destroy上次使用的Timer
+     */
+    private void destroyTimer() {
+        if (mTimer != null) {
+            mTimer.cancel();
+            mTimer = null;
+        }
+        if (mTimerTask != null) {
+            mTimerTask.cancel();
+            mTimerTask = null;
+        }
     }
 
     private void uploadRecord() {
