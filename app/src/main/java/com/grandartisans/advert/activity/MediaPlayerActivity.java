@@ -96,6 +96,7 @@ import com.grandartisans.advert.utils.AdvertVersion;
 import com.grandartisans.advert.utils.CommonUtil;
 import com.grandartisans.advert.utils.FileUtils;
 import com.grandartisans.advert.utils.LogToFile;
+import com.grandartisans.advert.utils.NetUtil;
 import com.grandartisans.advert.utils.SerialPortUtils;
 
 import com.grandartisans.advert.R;
@@ -183,9 +184,10 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 
 	private final int START_REPORT_PLAYSTATUS_CMD= 100019;
 
-	private final int START_CAMERA_SERVICE_CMD = 100020;
+	private final int START_SERVICE_CMD = 100020;
 
 	private final int SET_LIFT_STOP_CMD = 100021;
+	private final int START_FIRST_RECORD_CMD = 100022;
 
 	private String mMode ="";
 
@@ -265,12 +267,15 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 				case START_REPORT_PLAYSTATUS_CMD:
 					ReportPlayStatus();
 					break;
-				case START_CAMERA_SERVICE_CMD:
-					initNetworkService();
+				case START_SERVICE_CMD:
+					initService();
 					break;
 				case SET_LIFT_STOP_CMD:
 					setScreenOff();
 					setLiftState(LIFT_STATE_STOP);
+				case START_FIRST_RECORD_CMD:
+					startFirstRecord();
+					break;
 				default:
 					break;
 			}
@@ -1840,7 +1845,7 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 				if (num != 0) {
                     RingLog.d(TAG, "Camera is on");
                     mCheckTimer.cancel();
-                    mHandler.sendEmptyMessageDelayed(START_CAMERA_SERVICE_CMD, 1000);
+                    mHandler.sendEmptyMessageDelayed(START_SERVICE_CMD, 1000);
                 } else {
                     RingLog.d(TAG, "None camera");
                 }
@@ -1870,7 +1875,16 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 	}
 
 	private void startPushRtmp() {
-		initCameraService();
+		if (!mCameraService.isHasFirstRecord()) {
+			// 第一次录像
+			mCameraService.startCameraRecord();
+		} else if (!mCameraService.getRecordFinished()) {
+			// 重新录像
+			mCameraService.restartCameraRecord();
+		} else if(CommonUtil.getModel().equals("GAPEDS4A3")) {
+			// 已录像完 进行推流
+			mCameraService.startRtmp();
+		}
 	}
 
 	private void stopPushRtmp() {
@@ -1878,6 +1892,11 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 			mPublisher.stopPublish();
 			mPublisher.stopRecord();
 		}
+	}
+
+	private void initService() {
+		initCameraService();
+		initNetworkService();
 	}
 
 	private void initCameraService() {
@@ -1894,6 +1913,7 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 			public void onServiceConnected(ComponentName name, IBinder service) {
 				CameraService.CamBinder binder = (CameraService.CamBinder) service;
 				mCameraService = binder.getService();
+				mHandler.sendEmptyMessage(START_FIRST_RECORD_CMD);
 			}
 
 			@Override
@@ -1920,6 +1940,10 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 				mNetworkService.setOnGetConnectState(new NetworkService.GetConnectState() {
 					@Override
 					public void GetState(int isConnected) {
+						if (mIntentId != 0 && isConnected != 0) {
+							// 当前还是处于有网状态，不做任何动作
+							return;
+						}
 						if (mIntentId != isConnected) {
 							// 如果当前连接状态与广播服务返回的状态不同才进行通知显示
 							mIntentId = isConnected;
@@ -1928,6 +1952,7 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 							if (mIntentId == 0) {
 								// 未连接
 								RingLog.d(TAG, "The network has disconnected");
+								CameraService.cameraNeedStop = true;
 								mHandler.sendEmptyMessage(STOP_PUSH_RTMP);
 							} else if (mIntentId != 0) {
 								// 已连接
@@ -1942,5 +1967,12 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 			@Override
 			public void onServiceDisconnected(ComponentName name) {}
 		};
+	}
+
+	private void startFirstRecord() {
+		int networkStatus = NetUtil.getNetworkState(this);
+		if (networkStatus != 0) {
+			mCameraService.startCameraRecord();
+		}
 	}
 }

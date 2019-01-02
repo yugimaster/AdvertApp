@@ -49,6 +49,7 @@ public class CameraService extends Service implements SrsRecordHandler.SrsRecord
     private int mTimerCount = 0;
 
     private boolean isRecord = false;
+    private boolean hasFirstRecord = false;
     private boolean recordHasFinished = false;
     public static boolean cameraNeedStop = false;
 
@@ -101,7 +102,6 @@ public class CameraService extends Service implements SrsRecordHandler.SrsRecord
     public int onStartCommand(Intent intent, int flags, int startId) {
         handler = new Handler();
         recordPath = getApplicationContext().getExternalFilesDir(null).getPath();
-        mHandler.sendEmptyMessage(START_RECORD);
         return super.onStartCommand(intent, flags, startId);
     }
 
@@ -212,6 +212,25 @@ public class CameraService extends Service implements SrsRecordHandler.SrsRecord
         }
     }
 
+    public void startCameraRecord() {
+        RingLog.d(TAG, "Open Record Camera");
+        deviceId = SystemInfoManager.readFromNandkey("usid");
+        if (deviceId == null) {
+            deviceId = "G50234001485210002";
+        }
+
+        mPublisher = MediaPlayerActivity.mPublisher;
+        mPublisher.setRecordHandler(new SrsRecordHandler(this));
+        mCamera = mPublisher.getCamera();
+        if (mCamera != null) {
+            RingLog.d(TAG, "Camera Id is: " + mPublisher.getCamraId());
+            RingLog.d(TAG, "Start record");
+            // 开始录像
+            mPublisher.startRecord(recordPath + "/" + deviceId + ".mp4");
+            hasFirstRecord = true;
+        }
+    }
+
     public void restartCameraRecord() {
         if (recordHasFinished) {
             RingLog.d(TAG, "Not need record any more");
@@ -230,7 +249,15 @@ public class CameraService extends Service implements SrsRecordHandler.SrsRecord
         return isRecord;
     }
 
-    private void startRtmp() {
+    public boolean getRecordFinished() {
+        return recordHasFinished;
+    }
+
+    public boolean isHasFirstRecord() {
+        return hasFirstRecord;
+    }
+
+    public void startRtmp() {
         RingLog.d(TAG, "Open RTMP Camera");
         SrsCameraView cameraView = MediaPlayerActivity.mCameraView;
         // RTMP推流状态回调
@@ -244,24 +271,6 @@ public class CameraService extends Service implements SrsRecordHandler.SrsRecord
         String rtmpUrl = RTMP_CHANNEL + "/" + deviceId;
         RingLog.d(TAG, "The rtmp url is: " + rtmpUrl);
         mPublisher.startPublish(rtmpUrl);
-    }
-
-    private void startCameraRecord() {
-        RingLog.d(TAG, "Open Record Camera");
-        deviceId = SystemInfoManager.readFromNandkey("usid");
-        if (deviceId == null) {
-            deviceId = "G50234001485210002";
-        }
-
-        mPublisher = MediaPlayerActivity.mPublisher;
-        mPublisher.setRecordHandler(new SrsRecordHandler(this));
-        mCamera = mPublisher.getCamera();
-        if (mCamera != null) {
-            RingLog.d(TAG, "Camera Id is: " + mPublisher.getCamraId());
-            RingLog.d(TAG, "Start record");
-            // 开始录像
-            mPublisher.startRecord(recordPath + "/" + deviceId + ".mp4");
-		}
     }
 
     private void startPublishRecordTimer() {
