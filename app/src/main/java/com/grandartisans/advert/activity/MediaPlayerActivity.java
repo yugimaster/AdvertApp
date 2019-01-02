@@ -387,7 +387,9 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 		prjmanager = PrjSettingsManager.getInstance(this);
 
 		mMode = CommonUtil.getModel();
-
+		if(mMode.equals("GAPEDS4A3") || mMode.equals("GAPEDS4A6")){
+			prjmanager.setMaxBrightness("530,853,683");
+		}
 		if(mMode.equals("GAPADS4A1") || mMode.equals("GAPEDS4A3")){
 			checkCamera();
 		}
@@ -1870,7 +1872,11 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 		layoutParams.setMargins(0, 0, 0, 0);
 		mCameraView.setLayoutParams(layoutParams);
 		// 调整摄像头角度
-		mCameraView.setPreviewOrientation(0);
+		if(mMode.equals("GAPADS4A1")) {
+			mCameraView.setPreviewOrientation(180);
+		}else{
+			mCameraView.setPreviewOrientation(0);
+		}
 		mPublisher.startCamera();
 	}
 

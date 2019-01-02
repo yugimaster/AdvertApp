@@ -6,8 +6,8 @@ android {
         applicationId "com.grandartisans.advert"
         minSdkVersion 21
         targetSdkVersion 27
-        versionCode 24
-        versionName "1.1.13"
+        versionCode 25
+        versionName "1.1.14"
     }
     sourceSets {
         main {
