@@ -218,6 +218,7 @@ public class CameraService extends Service implements SrsRecordHandler.SrsRecord
         if (deviceId == null) {
             deviceId = "G50234001485210002";
         }
+        deviceId=deviceId.toUpperCase();
 
         mPublisher = MediaPlayerActivity.mPublisher;
         mPublisher.setRecordHandler(new SrsRecordHandler(this));
