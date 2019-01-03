@@ -264,6 +264,7 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 					break;
 				case STOP_PUSH_RTMP:
                     stopPushRtmp();
+                    break;
 				case START_REPORT_PLAYSTATUS_CMD:
 					ReportPlayStatus();
 					break;
@@ -343,7 +344,7 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 	Runnable runableSetPowerOff = new Runnable() {
 		@Override
 		public void run() {
-            lock.lock();
+			lock.lock();
             if(isPowerOff==false) {
 				isPowerOff = true;
 				setScreenOff();
@@ -659,6 +660,7 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 		super.onResume();
 		Log.i(TAG,"onResume");
 		initView();
+
 		if (IsCameraServiceOn) {
 			mCameraService.restartCameraRecord();
 		}
@@ -1873,7 +1875,7 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 		mCameraView.setLayoutParams(layoutParams);
 		// 调整摄像头角度
 		if(mMode.equals("GAPADS4A1")) {
-			mCameraView.setPreviewOrientation(180);
+			mCameraView.setPreviewOrientation(0);
 		}else{
 			mCameraView.setPreviewOrientation(0);
 		}
