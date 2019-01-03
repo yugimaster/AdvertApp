@@ -62,7 +62,6 @@ import android.widget.LinearLayout;
 import android.widget.MediaController;
 import android.widget.RelativeLayout;
 import android.widget.TextView;
-import android.widget.Toast;
 import android.widget.VideoView;
 
 import com.github.faucamp.simplertmp.RtmpHandler;
@@ -96,7 +95,6 @@ import com.grandartisans.advert.utils.AdvertVersion;
 import com.grandartisans.advert.utils.CommonUtil;
 import com.grandartisans.advert.utils.FileUtils;
 import com.grandartisans.advert.utils.LogToFile;
-import com.grandartisans.advert.utils.NetUtil;
 import com.grandartisans.advert.utils.SerialPortUtils;
 
 import com.grandartisans.advert.R;
@@ -179,8 +177,8 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 	private final int ON_PAUSE_EVENT_CMD = 100014;
 	private final int SET_POWER_ALARM_CMD = 100015;
 	private final int START_OPEN_SERIALPORT = 100016;
-	private final int START_PUSH_RTMP = 100017;
-	private final int STOP_PUSH_RTMP = 100018;
+	private final int START_PUSH_CMD = 100017;
+	private final int STOP_PUSH_CMD = 100018;
 
 	private final int START_REPORT_PLAYSTATUS_CMD= 100019;
 
@@ -230,6 +228,7 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 	private boolean  activate_started = false;
 	private boolean IsCameraServiceOn = false;
 	private boolean IsNetworkServiceOn = false;
+	public static boolean firstStartRecord = false;
 
 	private Handler mHandler = new Handler()
 	{
@@ -259,11 +258,11 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 				case SET_POWER_ALARM_CMD:
 					SetPowerAlarm();
 					break;
-				case START_PUSH_RTMP:
-                    startPushRtmp();
+				case START_PUSH_CMD:
+					startPush();
 					break;
-				case STOP_PUSH_RTMP:
-                    stopPushRtmp();
+				case STOP_PUSH_CMD:
+					stopPush();
                     break;
 				case START_REPORT_PLAYSTATUS_CMD:
 					ReportPlayStatus();
@@ -467,7 +466,7 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
                 //mMediaPlayer.setVideoScalingMode(MediaPlayer.VIDEO_SCALING_MODE_SCALE_TO_FIT_WITH_CROPPING);
                 mMediaPlayer.setVideoScalingMode(MediaPlayer.VIDEO_SCALING_MODE_SCALE_TO_FIT);
                 mMediaPlayer.start();
-                if (IsCameraServiceOn && !mCameraService.getRecordStatus()) {
+                if (IsCameraServiceOn && mCameraService != null && !mCameraService.getRecordStatus()) {
                     RingLog.d(TAG, "Player is resumed, now resume record");
                     mPublisher.resumeRecord();
                 }
@@ -621,7 +620,8 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 
 		//mHandler.sendEmptyMessageDelayed(ON_PAUSE_EVENT_CMD,1000);
 		CameraService.cameraNeedStop = true;
-		stopPushRtmp();
+		stopPush();
+		stopRecord();
 	}
 	private void onPauseEvent(){
 		Log.i(TAG,"onPauseEvent");
@@ -647,7 +647,8 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 			IsNetworkServiceOn = false;
 		}
 		CameraService.cameraNeedStop = true;
-		stopPushRtmp();
+		stopPush();
+		stopRecord();
 		/*
 		if(AccSensorEnabled) {
 			mSensorManager.unregisterListener(this);
@@ -661,7 +662,7 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 		Log.i(TAG,"onResume");
 		initView();
 
-		if (IsCameraServiceOn) {
+		if (IsCameraServiceOn && mPublisher != null) {
 			mCameraService.restartCameraRecord();
 		}
 	}
@@ -730,7 +731,7 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 					setScaleMode(false);
 					surface.setBackground(null);
 					mMediaPlayer.start();
-					if (IsCameraServiceOn && !mCameraService.getRecordStatus()) {
+					if (IsCameraServiceOn && mCameraService != null && !mCameraService.getRecordStatus()) {
 						RingLog.d(TAG, "Player is resumed, now resume record");
 						mPublisher.resumeRecord();
 					}
@@ -882,7 +883,8 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 		}
 		CameraService.cameraNeedStop = true;
 
-		stopPushRtmp();
+		stopPush();
+		stopRecord();
 		if (IsCameraServiceOn) {
 			unbindService(mCamServiceConn);
 			IsCameraServiceOn = false;
@@ -1434,7 +1436,7 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 			setScreen(1);
 			if (mMediaPlayer != null) {
 				mMediaPlayer.start();
-				if (IsCameraServiceOn && !mCameraService.getRecordStatus()) {
+				if (IsCameraServiceOn && mCameraService != null && !mCameraService.getRecordStatus()) {
 					RingLog.d(TAG, "Player is resumed, now resume record");
 					mPublisher.resumeRecord();
 				}
@@ -1849,6 +1851,7 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 				if (num != 0) {
                     RingLog.d(TAG, "Camera is on");
                     mCheckTimer.cancel();
+                    firstStartRecord = true;
                     mHandler.sendEmptyMessageDelayed(START_SERVICE_CMD, 1000);
                 } else {
                     RingLog.d(TAG, "None camera");
@@ -1882,23 +1885,29 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 		mPublisher.startCamera();
 	}
 
-	private void startPushRtmp() {
-		if (!mCameraService.isHasFirstRecord()) {
-			// 第一次录像
-			mCameraService.startCameraRecord();
-		} else if (!mCameraService.getRecordFinished()) {
-			// 重新录像
-			mCameraService.restartCameraRecord();
+	private void startPush() {
+		if (firstStartRecord) {
+			// 等待第一次录像完成
+			return;
+		}
+		if (mCameraService.getFinishStatus() && !mCameraService.getUploadStatus() && !mCameraService.recordUploadSuccess()) {
+			// 开始上传录像
+			mCameraService.uploadRecord();
 		} else if(CommonUtil.getModel().equals("GAPEDS4A3")) {
-			// 已录像完 进行推流
+			// 已上传完 进行推流
 			mCameraService.startRtmp();
 		}
 	}
 
-	private void stopPushRtmp() {
+	private void stopRecord() {
 		if (mPublisher != null) {
-			mPublisher.stopPublish();
 			mPublisher.stopRecord();
+		}
+	}
+
+	private void stopPush() {
+		if (mPublisher != null && mCameraService.recordUploadSuccess()) {
+			mPublisher.stopPublish();
 		}
 	}
 
@@ -1932,7 +1941,6 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 	}
 
     private void initNetworkService() {
-		initCameraView();
 		initNetServiceConnection();
 		Intent intent = new Intent(MediaPlayerActivity.this, NetworkService.class);
 		startService(intent);
@@ -1961,11 +1969,11 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 								// 未连接
 								RingLog.d(TAG, "The network has disconnected");
 								CameraService.cameraNeedStop = true;
-								mHandler.sendEmptyMessage(STOP_PUSH_RTMP);
+								mHandler.sendEmptyMessage(STOP_PUSH_CMD);
 							} else if (mIntentId != 0) {
 								// 已连接
 								RingLog.d(TAG, "The network has connected");
-								mHandler.sendEmptyMessage(START_PUSH_RTMP);
+								mHandler.sendEmptyMessage(START_PUSH_CMD);
 							}
 						}
 					}
@@ -1978,8 +1986,8 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 	}
 
 	private void startFirstRecord() {
-		int networkStatus = NetUtil.getNetworkState(this);
-		if (networkStatus != 0) {
+		initCameraView();
+		if (mCameraService != null) {
 			mCameraService.startCameraRecord();
 		}
 	}

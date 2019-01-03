@@ -49,8 +49,9 @@ public class CameraService extends Service implements SrsRecordHandler.SrsRecord
     private int mTimerCount = 0;
 
     private boolean isRecord = false;
-    private boolean hasFirstRecord = false;
     private boolean recordHasFinished = false;
+    private boolean isUploading = false;
+    private boolean uploadSuccess = false;
     public static boolean cameraNeedStop = false;
 
     private static final String TAG = CameraService.class.getSimpleName();
@@ -132,13 +133,19 @@ public class CameraService extends Service implements SrsRecordHandler.SrsRecord
     public void onRecordFinished(String msg) {
         RingLog.d(TAG, "Record finished");
         isRecord = false;
+        mTimerCount = 0;
         if (cameraNeedStop){
             RingLog.d(TAG, "Record is forced to stop");
             destroyTimer();
+            cameraNeedStop = false;
+        } else {
+            RingLog.d(TAG, "Now stop record, upload it to server");
+            recordHasFinished = true;
+            mHandler.sendEmptyMessage(UPLOAD_FILE);
         }
-        RingLog.d(TAG, "Now stop record, upload it to server");
-        mTimerCount = 0;
-        mHandler.sendEmptyMessage(UPLOAD_FILE);
+        if (MediaPlayerActivity.firstStartRecord) {
+            MediaPlayerActivity.firstStartRecord = false;
+        }
     }
 
     @Override
@@ -228,7 +235,6 @@ public class CameraService extends Service implements SrsRecordHandler.SrsRecord
             RingLog.d(TAG, "Start record");
             // 开始录像
             mPublisher.startRecord(recordPath + "/" + deviceId + ".mp4");
-            hasFirstRecord = true;
         }
     }
 
@@ -250,12 +256,16 @@ public class CameraService extends Service implements SrsRecordHandler.SrsRecord
         return isRecord;
     }
 
-    public boolean getRecordFinished() {
+    public boolean getFinishStatus() {
         return recordHasFinished;
     }
 
-    public boolean isHasFirstRecord() {
-        return hasFirstRecord;
+    public boolean recordUploadSuccess() {
+        return uploadSuccess;
+    }
+
+    public boolean getUploadStatus() {
+        return isUploading;
     }
 
     public void startRtmp() {
@@ -312,8 +322,9 @@ public class CameraService extends Service implements SrsRecordHandler.SrsRecord
         }
     }
 
-    private void uploadRecord() {
+    public void uploadRecord() {
         // OSS初始化
+        isUploading = true;
         OSSCredentialProvider credentialProvider = new OSSPlainTextAKSKCredentialProvider(ACCESS_KEY_ID, ACCESS_KEY_SECRET);
         ClientConfiguration conf = new ClientConfiguration();
         conf.setConnectionTimeout(15 * 1000);   // 连接超时，默认15秒
@@ -323,6 +334,7 @@ public class CameraService extends Service implements SrsRecordHandler.SrsRecord
         OSS oss = new OSSClient(getApplicationContext(), END_POINT, credentialProvider, conf);
         RingLog.d(TAG, "OSS Init");
         uploadFile(oss);
+        isUploading = false;
         if(CommonUtil.getModel().equals("GAPEDS4A3")) {
             if (!cameraNeedStop) {
                 RingLog.d(TAG, "Now start push rtmp");
@@ -348,15 +360,18 @@ public class CameraService extends Service implements SrsRecordHandler.SrsRecord
             RingLog.d(TAG, "PubObject: Upload Success");
             RingLog.d(TAG, "ETag: " + putObjectResult.getETag());
             RingLog.d(TAG, "RequestId: " + putObjectResult.getRequestId());
+            uploadSuccess = true;
         } catch (ClientException e) {
             // 本地异常如网络异常等
             e.printStackTrace();
+            uploadSuccess = false;
         } catch (ServiceException e) {
             // 服务异常
             RingLog.d(TAG, "RequestId is: " + e.getRequestId());
             RingLog.d(TAG, "ErrorCode is: " + e.getErrorCode());
             RingLog.d(TAG, "HostId is: " + e.getHostId());
             RingLog.d(TAG, "RawMessage is: " + e.getRawMessage());
+            uploadSuccess = false;
         }
     }
 
