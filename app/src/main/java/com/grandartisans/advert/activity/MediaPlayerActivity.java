@@ -390,7 +390,7 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 		if(mMode.equals("GAPEDS4A3") || mMode.equals("GAPEDS4A6")){
 			prjmanager.setMaxBrightness("530,853,683");
 		}
-		if(mMode.equals("GAPADS4A1") || mMode.equals("GAPEDS4A3")){
+		if(mMode.equals("GAPADS4A1") || mMode.equals("GAPEDS4A3")||mMode.equals("GAPEDS4A6")){
 			checkCamera();
 		}
 
@@ -1893,7 +1893,7 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 		if (mCameraService.getFinishStatus() && !mCameraService.getUploadStatus() && !mCameraService.recordUploadSuccess()) {
 			// 开始上传录像
 			mCameraService.uploadRecord();
-		} else if(CommonUtil.getModel().equals("GAPEDS4A3")) {
+		} else if(CommonUtil.getModel().equals("GAPEDS4A3")||CommonUtil.getModel().equals("GAPEDS4A6") ) {
 			// 已上传完 进行推流
 			mCameraService.startRtmp();
 		}
