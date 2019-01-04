@@ -239,6 +239,7 @@ public class CameraService extends Service implements SrsRecordHandler.SrsRecord
     }
 
     public void restartCameraRecord() {
+        cameraNeedStop = false;
         if (recordHasFinished) {
             RingLog.d(TAG, "Not need record any more");
             return;
@@ -335,7 +336,8 @@ public class CameraService extends Service implements SrsRecordHandler.SrsRecord
         RingLog.d(TAG, "OSS Init");
         uploadFile(oss);
         isUploading = false;
-        if(CommonUtil.getModel().equals("GAPEDS4A3")) {
+        if(uploadSuccess ==true &&
+                (CommonUtil.getModel().equals("GAPEDS4A3")||CommonUtil.getModel().equals("GAPEDS4A6"))) {
             if (!cameraNeedStop) {
                 RingLog.d(TAG, "Now start push rtmp");
                 mHandler.sendEmptyMessage(START_RTMP);
