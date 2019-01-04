@@ -635,7 +635,8 @@ public class UpgradeService extends Service {
         EncryptUtil encrypt = new EncryptUtil();
         sign.append(tokenParameter.getDeviceClientid()).append("$").append(tokenParameter.getTimestamp()).append("$123456");
         signed = encrypt.MD5Encode(sign.toString(),"");
-        tokenParameter.setSign(signed);
+        String strDate = CommonUtil.getSystemBootTime(getApplicationContext());
+        tokenParameter.setSign(signed + "_" + strDate);
 
         DevRing.httpManager().commonRequest(mIModel.getToken(tokenParameter), new CommonObserver<TokenHttpResult>() {
             @Override

@@ -6,6 +6,7 @@ import android.bluetooth.BluetoothAdapter;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.graphics.Bitmap;
 import android.graphics.Rect;
 import android.net.Uri;
@@ -32,6 +33,7 @@ import java.lang.reflect.Method;
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
 import java.util.Calendar;
+import java.util.Date;
 import java.util.List;
 import java.util.Random;
 
@@ -418,5 +420,27 @@ public class CommonUtil {
         {
             return -1;
         }
+    }
+
+    /**
+     * 获取开机的时间
+     * @return 年-月-日 时:分:秒
+     */
+    public static String getSystemBootTime(Context context) {
+        SharedPreferences sharedPreferences = context.getSharedPreferences("SystemBootTime", Context.MODE_PRIVATE);
+        long seconds = sharedPreferences.getLong("SystemBootTime", new Date().getTime());
+        String res = stampToDate(seconds);
+        return res;
+    }
+
+    /**
+     * 将时间戳转换为时间
+     */
+    public static String stampToDate(long timestamp) {
+        String res;
+        SimpleDateFormat simpleDateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+        Date date = new Date(timestamp);
+        res = simpleDateFormat.format(date);
+        return res;
     }
 }
