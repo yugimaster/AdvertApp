@@ -238,7 +238,6 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 			{
 				case SET_SCREEN_ON_CMD:
 					setScreenOn();
-					//mHandler.sendEmptyMessageDelayed(SET_LIFT_STOP_CMD,1000*60*1);
 					break;
 				case START_PLAYER_CMD:
 					initPlayer();
@@ -1004,16 +1003,28 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 									setScreenOff();
                                 }
                                 if(mLiftState!=LIFT_STATE_INIT) {
-									setLiftState(LIFT_STATE_STOP);
+									setLiftState(LIFT_STATE_INIT);
 								}
                             } else {
-                            	//if( screenStatus == 0 && mLiftState==LIFT_STATE_INIT) {
-								if ((mLiftState == LIFT_STATE_INIT ||mLiftState== LIFT_STATE_UP ||mLiftState==LIFT_STATE_DOWN) && screenStatus == 0) {
+                            	if( screenStatus == 0 && mLiftState==LIFT_STATE_INIT) {
+								//if ((mLiftState == LIFT_STATE_INIT ||mLiftState== LIFT_STATE_UP ||mLiftState==LIFT_STATE_DOWN) && screenStatus == 0) {
                             		screenStatus = 2;
                             		Log.i(TAG, "threshold_distance= " + threshold_distance + "distance = " + distance + "setscreen on");
                             		//LogToFile.i(TAG,"threshold_distance= " + threshold_distance + "distance = " + distance + "setscreen on");
-									mHandler.sendEmptyMessageDelayed(SET_SCREEN_ON_CMD, 1000);
-                            	}
+
+									if(CommonUtil.getGsensorEnabled()!=0) {
+										mHandler.sendEmptyMessage(SET_SCREEN_ON_CMD);
+										mHandler.sendEmptyMessageDelayed(SET_LIFT_STOP_CMD, 1000 * 60 * 2);
+									}else{
+										mHandler.sendEmptyMessageDelayed(SET_SCREEN_ON_CMD, 1000);
+									}
+                            	}else {
+                            		if(screenStatus==1 || screenStatus == 2) {
+										mHandler.removeMessages(SET_LIFT_STOP_CMD);
+									}else if(screenStatus == 0 && (mLiftState== LIFT_STATE_UP ||mLiftState==LIFT_STATE_DOWN)){
+										mHandler.sendEmptyMessage(SET_SCREEN_ON_CMD);
+									}
+								}
                             }
                         }
                     }
