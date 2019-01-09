@@ -34,6 +34,10 @@ public class BootReceiver extends BroadcastReceiver {
 		if ("android.intent.action.BOOT_COMPLETED".equals(action)) {
 			//Intent intentService = new Intent(context,RemoteService.class);
 			//context.startService(intentService);
+			sharedPreferences = context.getSharedPreferences("SystemBootTime", Context.MODE_PRIVATE);
+			editor = sharedPreferences.edit();
+			editor.putLong("SystemBootTime", new Date().getTime());
+			editor.commit();
 
 			Intent intentService = new Intent(context,UpgradeService.class);
 			context.startService(intentService);
@@ -47,11 +51,6 @@ public class BootReceiver extends BroadcastReceiver {
 				context.startService(intentService);
 			}
 			*/
-		} else if (action.equals(Intent.ACTION_BOOT_COMPLETED)) {
-			sharedPreferences = context.getSharedPreferences("SystemBootTime", Context.MODE_PRIVATE);
-			editor = sharedPreferences.edit();
-			editor.putLong("SystemBootTime", new Date().getTime());
-			editor.commit();
 		}
 	}
 }
