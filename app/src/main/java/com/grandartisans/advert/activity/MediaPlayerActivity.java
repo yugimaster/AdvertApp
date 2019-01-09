@@ -203,6 +203,13 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 	static final int DOOR_STATE_OPENED  = 1;
 	static final int DOOR_STATE_CLOSED = 2;
 
+	static final int PLAYER_STATE_INIT = 0;
+	static final int PLAYER_STATE_PLAYING = 1;
+	static final int PLAYER_STATE_PAUSED = 2;
+	static final int PLAYER_STATE_STOPED = 3;
+	static final int PLAYER_STATE_RELEASED = 4;
+	private int mPlayState = PLAYER_STATE_INIT;
+
 	private SensorManager mSensorManager;
 	private Sensor mAccSensor;
 	public static SrsCameraView mCameraView;
@@ -472,6 +479,7 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
                 }
                 if (getScreenStatus() == 0){
                     mMediaPlayer.pause();
+					mPlayState = PLAYER_STATE_PAUSED;
 			    }
 			    if(mMode.equals("AOSP on p313")) {
 					if (player_first_time == true) {
@@ -503,6 +511,7 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 	private void startPlay(String url) {
 		try {
 			//mMediaPlayer.setDataSource(url);
+
 			Log.d(TAG, "start play: url = " + url );
 			mMediaPlayer.setDataSource(MediaPlayerActivity.this,Uri.parse(url));
 			mMediaPlayer.prepareAsync();
@@ -546,7 +555,11 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 		Log.i(TAG,"onVideoPlayCompleted format  isPowerOff =  " + isPowerOff);
 		savePlayRecord();
 		if(!isPowerOff) {
-			mMediaPlayer.reset();
+		    if(mMediaPlayer!=null) {
+                mMediaPlayer.stop();
+                mMediaPlayer.reset();
+				mPlayState = PLAYER_STATE_STOPED;
+            }
 			//mMediaPlayer.stop();
 			playindex++;
 			String url = getValidUrl();
@@ -1437,6 +1450,7 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 			setScreen(0);
 			if (mMediaPlayer != null && mMediaPlayer.isPlaying()) {
 				mMediaPlayer.pause();
+				mPlayState = PLAYER_STATE_PAUSED;
 				if (IsCameraServiceOn && mCameraService.getRecordStatus()) {
 					RingLog.d(TAG, "Player is paused, so pause record");
 					mPublisher.pauseRecord();
@@ -1447,7 +1461,7 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 	private void setScreenOn() {
 		if(getScreenStatus()!=1 ) {
 			setScreen(1);
-			if (mMediaPlayer != null) {
+			if (mMediaPlayer != null && mPlayState == PLAYER_STATE_PAUSED) {
 				mMediaPlayer.start();
 				if (IsCameraServiceOn && mCameraService != null && !mCameraService.getRecordStatus()) {
 					RingLog.d(TAG, "Player is resumed, now resume record");
@@ -1459,12 +1473,14 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 				initView();
 				initPlayer();
 			}
+			/*
 			if(mMediaPlayer==null || !mMediaPlayer.isPlaying()){
 				Log.i(TAG,"Player is error ,reset player");
 				mediaplayerDestroyedCount +=1;
 				initView();
 				initPlayer();
 			}
+			*/
 		}
 	}
 
