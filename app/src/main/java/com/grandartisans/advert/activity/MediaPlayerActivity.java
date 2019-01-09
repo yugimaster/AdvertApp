@@ -473,7 +473,7 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
                 //mMediaPlayer.setVideoScalingMode(MediaPlayer.VIDEO_SCALING_MODE_SCALE_TO_FIT_WITH_CROPPING);
                 mMediaPlayer.setVideoScalingMode(MediaPlayer.VIDEO_SCALING_MODE_SCALE_TO_FIT);
                 mMediaPlayer.start();
-                if (IsCameraServiceOn && mCameraService != null && !mCameraService.getRecordStatus()) {
+                if (IsCameraServiceOn && mCameraService != null && !mCameraService.getFinishStatus() && !mCameraService.getRecordStatus()) {
                     RingLog.d(TAG, "Player is resumed, now resume record");
                     mPublisher.resumeRecord();
                 }
@@ -744,7 +744,7 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 					setScaleMode(false);
 					surface.setBackground(null);
 					mMediaPlayer.start();
-					if (IsCameraServiceOn && mCameraService != null && !mCameraService.getRecordStatus()) {
+					if (IsCameraServiceOn && mCameraService != null && !mCameraService.getFinishStatus() && !mCameraService.getRecordStatus()) {
 						RingLog.d(TAG, "Player is resumed, now resume record");
 						mPublisher.resumeRecord();
 					}
@@ -1463,7 +1463,7 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 			setScreen(1);
 			if (mMediaPlayer != null && mPlayState == PLAYER_STATE_PAUSED) {
 				mMediaPlayer.start();
-				if (IsCameraServiceOn && mCameraService != null && !mCameraService.getRecordStatus()) {
+				if (IsCameraServiceOn && mCameraService != null && !mCameraService.getFinishStatus() && !mCameraService.getRecordStatus()) {
 					RingLog.d(TAG, "Player is resumed, now resume record");
 					mPublisher.resumeRecord();
 				}
