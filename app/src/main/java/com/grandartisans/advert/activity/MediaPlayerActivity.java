@@ -270,8 +270,9 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 					initService();
 					break;
 				case SET_LIFT_STOP_CMD:
-					setScreenOff();
 					setLiftState(LIFT_STATE_STOP);
+					setScreenOff();
+					break;
 				case START_FIRST_RECORD_CMD:
 					startFirstRecord();
 					break;
@@ -1013,18 +1014,19 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
                             		//LogToFile.i(TAG,"threshold_distance= " + threshold_distance + "distance = " + distance + "setscreen on");
 
 									if(CommonUtil.getGsensorEnabled()!=0) {
-										mHandler.sendEmptyMessage(SET_SCREEN_ON_CMD);
-										mHandler.sendEmptyMessageDelayed(SET_LIFT_STOP_CMD, 1000 * 60 * 2);
+										mHandler.sendEmptyMessageDelayed(SET_SCREEN_ON_CMD, 1000);
+										mHandler.removeMessages(SET_LIFT_STOP_CMD);
+										mHandler.sendEmptyMessageDelayed(SET_LIFT_STOP_CMD, 1000 * 60*2);
 									}else{
 										mHandler.sendEmptyMessageDelayed(SET_SCREEN_ON_CMD, 1000);
 									}
-                            	}else {
-                            		if(screenStatus==1 || screenStatus == 2) {
+                            	}else if(screenStatus == 0 && (mLiftState== LIFT_STATE_UP ||mLiftState==LIFT_STATE_DOWN)){
 										mHandler.removeMessages(SET_LIFT_STOP_CMD);
-									}else if(screenStatus == 0 && (mLiftState== LIFT_STATE_UP ||mLiftState==LIFT_STATE_DOWN)){
 										mHandler.sendEmptyMessage(SET_SCREEN_ON_CMD);
-									}
+                            	}else if(screenStatus == 1 && (mLiftState== LIFT_STATE_UP ||mLiftState==LIFT_STATE_DOWN)){
+										mHandler.removeMessages(SET_LIFT_STOP_CMD);
 								}
+
                             }
                         }
                     }
