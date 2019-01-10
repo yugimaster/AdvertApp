@@ -32,7 +32,9 @@ import java.io.LineNumberReader;
 import java.lang.reflect.Method;
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.Calendar;
+import java.util.Collection;
 import java.util.Date;
 import java.util.List;
 import java.util.Random;
@@ -442,5 +444,53 @@ public class CommonUtil {
         Date date = new Date(timestamp);
         res = simpleDateFormat.format(date);
         return res;
+    }
+
+    /**
+     * 上传 Crash Log 到服务器
+     * @param context
+     * @return 是否需要上传
+     */
+    public static boolean uploadCrashLog(Context context) {
+        String path = "/sdcard/Android/data/" + Utils.getAppPackageName(context) + "/cache/crash_log";
+        String zipFilePath = path + "/crash_log.zip";
+        if (FileUtils.isFileExit(path)) {
+            // 判断文件夹是否存在
+            File file = new File(path);
+            File[] listFiles = file.listFiles();
+            int size = listFiles.length;
+            if (size > 0) {
+                // 判断该文件夹是否为空
+                Collection c = new ArrayList();
+                for (int i = 0; i < size; i++) {
+                    c.add(listFiles[i]);
+                }
+                // 打包成zip
+                try {
+                    ZipUtils.zipFiles(c, new File(zipFilePath));
+                    return true;
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+        }
+        return false;
+    }
+
+    /**
+     * 删除文件 如果是文件夹则清空
+     * @param file
+     */
+    public static void deleteFile(File file) {
+        // 是否为文件夹
+        if (file.isDirectory()) {
+            File[] files = file.listFiles();
+            for (int i = 0; i < files.length; i++) {
+                File f = files[i];
+                deleteFile(f);
+            }
+        } else if (file.exists()) {
+            file.delete();
+        }
     }
 }

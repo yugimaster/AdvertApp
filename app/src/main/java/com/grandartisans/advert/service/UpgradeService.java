@@ -15,6 +15,15 @@ import android.telephony.SignalStrength;
 import android.telephony.TelephonyManager;
 import android.util.Log;
 
+import com.alibaba.sdk.android.oss.ClientConfiguration;
+import com.alibaba.sdk.android.oss.ClientException;
+import com.alibaba.sdk.android.oss.OSS;
+import com.alibaba.sdk.android.oss.OSSClient;
+import com.alibaba.sdk.android.oss.ServiceException;
+import com.alibaba.sdk.android.oss.common.auth.OSSCredentialProvider;
+import com.alibaba.sdk.android.oss.common.auth.OSSPlainTextAKSKCredentialProvider;
+import com.alibaba.sdk.android.oss.model.PutObjectRequest;
+import com.alibaba.sdk.android.oss.model.PutObjectResult;
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 import com.grandartisans.advert.activity.MediaPlayerActivity;
@@ -82,6 +91,8 @@ import java.io.File;
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.util.ArrayList;
+import java.util.Calendar;
+import java.util.Date;
 import java.util.List;
 import java.util.Map;
 
@@ -126,6 +137,11 @@ public class UpgradeService extends Service {
     private final String USB_UPGRADE_FILE_SUFFIX = ".GA";
     private final String USB_UPGRADE_ORGFILE_SUFFIX = ".config";
     private final String USB_UPGRADE_SCHEDULE_SUB = "_group_times";
+    private final String END_POINT = "http://oss-cn-shenzhen.aliyuncs.com";
+    private final String ACCESS_KEY_ID = "LTAIvIhIJ3JNzkRl";
+    private final String ACCESS_KEY_SECRET = "7aZBMS42QqguHTF5cq5uPD7tle8dK3";
+    private final String BUCKET_NAME = "gadsp";
+    private final String OBJECT_KEY_DIR = "advert/crash_log/";
 
     private String mUsbPath = "";
 
@@ -361,6 +377,13 @@ public class UpgradeService extends Service {
         }
     };
 
+    Runnable runnableUploadLog = new Runnable() {
+        @Override
+        public void run() {
+            uploadLogToOSS();
+        }
+    };
+
     private void SavePlayRecordToUsb() {
         List<PlayRecord> records = dbutils.getPlayRecordAll(PlayRecord.class);
         String eventlistFile = mUsbPath+USB_UPGRADE_DIR+ "/eventlist";
@@ -515,6 +538,7 @@ public class UpgradeService extends Service {
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         initUSB(getApplicationContext());
+        uploadLog(getApplicationContext());
         appUpgrade(getApplicationContext());
         getToken(false);
         mHandler.sendEmptyMessageDelayed(SHOW_TIME_INFO_CMD,3*1000);
@@ -1298,5 +1322,65 @@ public class UpgradeService extends Service {
         };
         //开始监听
         tm.listen(mylistener, PhoneStateListener.LISTEN_SIGNAL_STRENGTHS);
+    }
+
+    private void uploadLog(Context context) {
+        handler = new Handler();
+        boolean isNeedUpload = CommonUtil.uploadCrashLog(context);
+        if (isNeedUpload) {
+            new Thread(runnableUploadLog).start();
+        }
+    }
+
+    private void uploadLogToOSS() {
+        RingLog.d(TAG, "Start to upload zip");
+        boolean uploadSuccess = false;
+        String path = "/sdcard/Android/data/" + Utils.getAppPackageName(getApplicationContext()) + "/cache/crash_log";
+        String zipFilePath = path + "/crash_log.zip";
+        // OSS初始化
+        OSSCredentialProvider credentialProvider = new OSSPlainTextAKSKCredentialProvider(ACCESS_KEY_ID, ACCESS_KEY_SECRET);
+        ClientConfiguration conf = new ClientConfiguration();
+        conf.setConnectionTimeout(15 * 1000);   // 连接超时，默认15秒
+        conf.setSocketTimeout(15 * 1000);   // socket超时，默认15秒
+        conf.setMaxConcurrentRequest(5);    // 最大并发请求数，默认5个
+        conf.setMaxErrorRetry(2);   // 失败后最大重试次数，默认2次
+        OSS oss = new OSSClient(getApplicationContext(), END_POINT, credentialProvider, conf);
+
+        // 上传文件
+        Calendar calendar = Calendar.getInstance();
+        int year = calendar.get(Calendar.YEAR);
+        int month = calendar.get(Calendar.MONTH) + 1;
+        int day = calendar.get(Calendar.DAY_OF_MONTH);
+        long timestamp = new Date().getTime();
+        String date = CommonUtil.stampToDate(timestamp);
+        String objectKey = OBJECT_KEY_DIR + Integer.toString(year) + "/" + Integer.toString(month) + "/" + Integer.toString(day) + "/CrashLog_" + date + ".zip";
+        PutObjectRequest put = new PutObjectRequest(BUCKET_NAME, objectKey, zipFilePath);
+        try {
+            PutObjectResult putObjectResult = oss.putObject(put);
+            Log.d(TAG, "PubObject: Upload Success");
+            Log.d(TAG, "ETag: " + putObjectResult.getETag());
+            Log.d(TAG, "RequestId: " + putObjectResult.getRequestId());
+            uploadSuccess = true;
+        } catch (ClientException e) {
+            // 本地异常如网络异常等
+            e.printStackTrace();
+            try {
+                Thread.sleep(60 * 1000);
+                uploadLogToOSS();
+            } catch (Exception c) {
+                Log.d(TAG, "Sleep exception");
+            }
+        } catch (ServiceException e) {
+            // 服务异常
+            Log.d(TAG, "RequestId is: " + e.getRequestId());
+            Log.d(TAG, "ErrorCode is: " + e.getErrorCode());
+            Log.d(TAG, "HostId is: " + e.getHostId());
+            Log.d(TAG, "RawMessage is: " + e.getRawMessage());
+        }
+        if (uploadSuccess) {
+            // 上传成功 清空文件夹
+            File file = new File(path);
+            CommonUtil.deleteFile(file);
+        }
     }
 }
