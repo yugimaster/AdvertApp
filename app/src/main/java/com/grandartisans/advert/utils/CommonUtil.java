@@ -448,30 +448,17 @@ public class CommonUtil {
 
     /**
      * 上传 Crash Log 到服务器
-     * @param context
+     * @param logPath
      * @return 是否需要上传
      */
-    public static boolean uploadCrashLog(Context context) {
-        String path = "/sdcard/Android/data/" + Utils.getAppPackageName(context) + "/cache/crash_log";
-        String zipFilePath = path + "/crash_log.zip";
-        if (FileUtils.isFileExit(path)) {
-            // 判断文件夹是否存在
-            File file = new File(path);
+    public static boolean isUploadCrashLog(String logPath) {
+        // 判断文件夹是否存在
+        if (FileUtils.isFileExit(logPath)) {
+            File file = new File(logPath);
             File[] listFiles = file.listFiles();
-            int size = listFiles.length;
-            if (size > 0) {
-                // 判断该文件夹是否为空
-                Collection c = new ArrayList();
-                for (int i = 0; i < size; i++) {
-                    c.add(listFiles[i]);
-                }
-                // 打包成zip
-                try {
-                    ZipUtils.zipFiles(c, new File(zipFilePath));
-                    return true;
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
+            // 判断该文件夹是否为空
+            if (listFiles.length > 0) {
+                return true;
             }
         }
         return false;

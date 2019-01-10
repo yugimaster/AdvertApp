@@ -92,6 +92,7 @@ import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.util.ArrayList;
 import java.util.Calendar;
+import java.util.Collection;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
@@ -144,6 +145,7 @@ public class UpgradeService extends Service {
     private final String OBJECT_KEY_DIR = "advert/crash_log/";
 
     private String mUsbPath = "";
+    private String mLogPath = "";
 
     private List<PlayingAdvert> adurls = new ArrayList<PlayingAdvert>();
 
@@ -380,7 +382,10 @@ public class UpgradeService extends Service {
     Runnable runnableUploadLog = new Runnable() {
         @Override
         public void run() {
-            uploadLogToOSS();
+            boolean zipFiles = zipFilesInDir(mLogPath);
+            if (zipFiles) {
+                uploadLogToOSS();
+            }
         }
     };
 
@@ -1325,18 +1330,38 @@ public class UpgradeService extends Service {
     }
 
     private void uploadLog(Context context) {
-        handler = new Handler();
-        boolean isNeedUpload = CommonUtil.uploadCrashLog(context);
+        mLogPath = FileUtil.getExternalCacheDir(context) + "/" + "crash_log";
+        boolean isNeedUpload = CommonUtil.isUploadCrashLog(mLogPath);
         if (isNeedUpload) {
             new Thread(runnableUploadLog).start();
         }
     }
 
+    private boolean zipFilesInDir(String path) {
+        String zipFilePath = path + "/" + "crash_log.zip";
+        File file = new File(path);
+        File[] files = file.listFiles();
+        int size = files.length;
+        if (size > 0) {
+            Collection collection = new ArrayList();
+            for (int i = 0; i < size; i++) {
+                collection.add(files[i]);
+            }
+            // 打包成zip
+            try {
+                ZipUtils.zipFiles(collection, new File(zipFilePath));
+                return true;
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+        return false;
+    }
+
     private void uploadLogToOSS() {
         RingLog.d(TAG, "Start to upload zip");
         boolean uploadSuccess = false;
-        String path = "/sdcard/Android/data/" + Utils.getAppPackageName(getApplicationContext()) + "/cache/crash_log";
-        String zipFilePath = path + "/crash_log.zip";
+        String zipFilePath = mLogPath + "/" + "crash_log.zip";
         // OSS初始化
         OSSCredentialProvider credentialProvider = new OSSPlainTextAKSKCredentialProvider(ACCESS_KEY_ID, ACCESS_KEY_SECRET);
         ClientConfiguration conf = new ClientConfiguration();
@@ -1353,7 +1378,8 @@ public class UpgradeService extends Service {
         int day = calendar.get(Calendar.DAY_OF_MONTH);
         long timestamp = new Date().getTime();
         String date = CommonUtil.stampToDate(timestamp);
-        String objectKey = OBJECT_KEY_DIR + Integer.toString(year) + "/" + Integer.toString(month) + "/" + Integer.toString(day) + "/CrashLog_" + date + ".zip";
+        String deviceId = SystemInfoManager.readFromNandkey("usid").toUpperCase();
+        String objectKey = OBJECT_KEY_DIR + Integer.toString(year) + "/" + Integer.toString(month) + "/" + Integer.toString(day) + "/CrashLog_" + deviceId + "_" + date + ".zip";
         PutObjectRequest put = new PutObjectRequest(BUCKET_NAME, objectKey, zipFilePath);
         try {
             PutObjectResult putObjectResult = oss.putObject(put);
@@ -1379,7 +1405,7 @@ public class UpgradeService extends Service {
         }
         if (uploadSuccess) {
             // 上传成功 清空文件夹
-            File file = new File(path);
+            File file = new File(mLogPath);
             CommonUtil.deleteFile(file);
         }
     }
