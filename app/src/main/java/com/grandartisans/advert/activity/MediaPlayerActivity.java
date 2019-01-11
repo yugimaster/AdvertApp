@@ -397,9 +397,6 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 		if(mMode.equals("GAPEDS4A3") || mMode.equals("GAPEDS4A6")){
 			prjmanager.setMaxBrightness("530,853,683");
 		}
-		if(mMode.equals("GAPADS4A1") || mMode.equals("GAPEDS4A3")||mMode.equals("GAPEDS4A6")){
-			checkCamera();
-		}
 
 		initAccSensor();
 
@@ -451,6 +448,9 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 		surfaceHolder = surface.getHolder();// SurfaceHolder是SurfaceView的控制接口
 		surfaceHolder.addCallback(this);
 		surfaceHolder.setType(SurfaceHolder.SURFACE_TYPE_PUSH_BUFFERS);
+
+		mCameraView = (SrsCameraView) findViewById(R.id.glsurfaceview_camera);
+		mCameraView.setVisibility(View.GONE);
 	}
 	/*
 	 * 初始化播放首段视频的player
@@ -569,6 +569,8 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 			} else {
 				startPlayDefault();
 			}
+		}else{
+			setScreenOff();
 		}
 	}
 	@Override
@@ -632,9 +634,6 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 		Log.i(TAG,"onPause");
 
 		//mHandler.sendEmptyMessageDelayed(ON_PAUSE_EVENT_CMD,1000);
-		CameraService.cameraNeedStop = true;
-		stopPush();
-		stopRecord();
 	}
 	private void onPauseEvent(){
 		Log.i(TAG,"onPauseEvent");
@@ -659,9 +658,11 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 			unbindService(mNetServiceConn);
 			IsNetworkServiceOn = false;
 		}
-		CameraService.cameraNeedStop = true;
-		stopPush();
-		stopRecord();
+		if (IsCameraServiceOn && mPublisher != null) {
+			CameraService.cameraNeedStop = true;
+			stopPush();
+			stopRecord();
+		}
 		/*
 		if(AccSensorEnabled) {
 			mSensorManager.unregisterListener(this);
@@ -674,10 +675,6 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 		super.onResume();
 		Log.i(TAG,"onResume");
 		initView();
-
-		if (IsCameraServiceOn && mPublisher != null) {
-			mCameraService.restartCameraRecord();
-		}
 	}
 	private void openSerialPort(){
 		if (serialPortUtils != null) {
@@ -687,7 +684,6 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 		}
 	}
 	private void onResumeEvent(){
-
         if(!mMode.equals("AOSP on p313")) {
             threshold_distance = Integer.valueOf(prjmanager.getDistance());
         }
@@ -695,6 +691,13 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 			mInitZ = Float.valueOf(prjmanager.getGsensorDefault());
 		}
 
+		if(mMode.equals("GAPADS4A1") || mMode.equals("GAPEDS4A3")||mMode.equals("GAPEDS4A6")){
+			if (IsCameraServiceOn && mPublisher != null) {
+				mCameraService.restartCameraRecord();
+			}else {
+				checkCamera();
+			}
+		}
 	}
 	@Override
 	public boolean onKeyDown(int keyCode, KeyEvent event) {
@@ -1865,8 +1868,6 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 	}
 	private void checkCamera() {
 		// 初始化CameraView 并设置为不可见
-		mCameraView = (SrsCameraView) findViewById(R.id.glsurfaceview_camera);
-		mCameraView.setVisibility(View.GONE);
 		startCheckCameraTimer();
 	}
 
