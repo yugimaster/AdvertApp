@@ -268,7 +268,6 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 					startPush();
 					break;
 				case STOP_PUSH_CMD:
-					stopPush();
                     break;
 				case START_REPORT_PLAYSTATUS_CMD:
 					ReportPlayStatus();
@@ -660,7 +659,6 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 		}
 		if (IsCameraServiceOn && mPublisher != null) {
 			CameraService.cameraNeedStop = true;
-			stopPush();
 			stopRecord();
 		}
 		/*
@@ -898,8 +896,6 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 			IsNetworkServiceOn = false;
 		}
 		CameraService.cameraNeedStop = true;
-
-		stopPush();
 		stopRecord();
 		if (IsCameraServiceOn) {
 			unbindService(mCamServiceConn);
@@ -1923,9 +1919,6 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 		if (mCameraService.getFinishStatus() && !mCameraService.getUploadStatus() && !mCameraService.recordUploadSuccess()) {
 			// 开始上传录像
 			mCameraService.uploadRecord();
-		} else if(CommonUtil.getModel().equals("GAPEDS4A3")||CommonUtil.getModel().equals("GAPEDS4A6") ) {
-			// 已上传完 进行推流
-			mCameraService.startRtmp();
 		}
 	}
 
@@ -1935,11 +1928,6 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 		}
 	}
 
-	private void stopPush() {
-		if (mPublisher != null && mCameraService.recordUploadSuccess()) {
-			mPublisher.stopPublish();
-		}
-	}
 
 	private void initService() {
 		initCameraService();
