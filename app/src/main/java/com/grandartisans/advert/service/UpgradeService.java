@@ -148,6 +148,7 @@ public class UpgradeService extends Service {
     private String mLogPath = "";
 
     private List<PlayingAdvert> adurls = new ArrayList<PlayingAdvert>();
+    private String mDeviceId = "";
 
     Runnable runableUsbUpgrade = new Runnable() {
         @Override
@@ -177,13 +178,15 @@ public class UpgradeService extends Service {
                     list = gson.fromJson(eventDataString, new TypeToken<List<TerminalGroup>>() {
                     }.getType());
                     RingLog.d(TAG, "USB Plugined list size = " + list.size());
-                    String deviceid = SystemInfoManager.readFromNandkey("usid").toUpperCase();
+                    if(mDeviceId.isEmpty()) {
+                        mDeviceId =  SystemInfoManager.getDeviceId();
+                    }
                     for (int i = 0; i < list.size(); i++) {
                         TerminalGroup group = list.get(i);
                         RingLog.d(TAG, "USB Plugined map = " + group.getGroupId());
                         String terminials[] = group.getArrTerminal();
                         for (int j = 0; j < terminials.length; j++) {
-                            if(deviceid.equals(terminials[j].toUpperCase())){
+                            if(mDeviceId.equals(terminials[j].toUpperCase())){
                                 RingLog.d(TAG, "USB Plugined map = " + terminials[j]);
 
                                 DevRing.cacheManager().spCache("usbActivate").put("activate",1);
@@ -414,7 +417,10 @@ public class UpgradeService extends Service {
                 PlayRecord recordItem = records.get(i);
                 if (recordItem.getCount() >0) {
                     EventParameter parameter = new EventParameter();
-                    parameter.setSn(SystemInfoManager.readFromNandkey("usid").toUpperCase());
+                    if(mDeviceId.isEmpty()) {
+                        mDeviceId =  SystemInfoManager.getDeviceId();
+                    }
+                    parameter.setSn(mDeviceId);
                     parameter.setSessionid(CommonUtil.getRandomString(50));
                     parameter.setTimestamp(System.currentTimeMillis());
                     parameter.setToken(UpgradeService.mToken);
@@ -563,7 +569,10 @@ public class UpgradeService extends Service {
         parameter.setAppIdent(Utils.getAppPackageName(context));
         //parameter.setAppIdent("123456");
         parameter.setAppName(Utils.getAppPackageName(context));
-        parameter.setDeviceClientid(SystemInfoManager.readFromNandkey("usid").toUpperCase());
+        if(mDeviceId.isEmpty()) {
+            mDeviceId =  SystemInfoManager.getDeviceId();
+        }
+        parameter.setDeviceClientid(mDeviceId);
         parameter.setRequestUuid(CommonUtil.getRandomString(50));
         parameter.setSystemVersion("2.0.1");
         parameter.setTimestamp(System.currentTimeMillis());
@@ -606,7 +615,10 @@ public class UpgradeService extends Service {
         parameter.setAndroidVersion(Utils.getAppVersionCode(context,packageName));
         parameter.setAppIdent(packageName);
         parameter.setAppName(packageName);
-        parameter.setDeviceClientid(SystemInfoManager.readFromNandkey("usid").toUpperCase());
+        if(mDeviceId.isEmpty()) {
+            mDeviceId =  SystemInfoManager.getDeviceId();
+        }
+        parameter.setDeviceClientid(mDeviceId);
         parameter.setRequestUuid(CommonUtil.getRandomString(50));
         parameter.setSystemVersion("2.0.1");
         parameter.setTimestamp(System.currentTimeMillis());
@@ -642,7 +654,10 @@ public class UpgradeService extends Service {
         String signed="";
         AdvertModel mIModel = new AdvertModel();
         TokenParameter tokenParameter = new TokenParameter();
-        tokenParameter.setDeviceClientid(SystemInfoManager.readFromNandkey("usid").toUpperCase());
+        if(mDeviceId.isEmpty()) {
+            mDeviceId =  SystemInfoManager.getDeviceId();
+        }
+        tokenParameter.setDeviceClientid(mDeviceId);
         tokenParameter.setTimestamp(System.currentTimeMillis() - SystemClock.elapsedRealtime());
         if(expired==true){
             tokenParameter.setRqeuestUuid("true");
@@ -722,7 +737,10 @@ public class UpgradeService extends Service {
     private void heardBeat(final String token ) {
         AdvertModel mIModel = new AdvertModel();
         HeartBeatParameter parameter = new HeartBeatParameter();
-        parameter.setDeviceClientid(SystemInfoManager.readFromNandkey("usid").toUpperCase());
+        if(mDeviceId.isEmpty()) {
+            mDeviceId =  SystemInfoManager.getDeviceId();
+        }
+        parameter.setDeviceClientid(mDeviceId);
         parameter.setTimestamp(System.currentTimeMillis());
         parameter.setToken(token);
         DevRing.httpManager().commonRequest(mIModel.sendHeartBeat(parameter), new CommonObserver<HeartBeatResult>() {
@@ -794,7 +812,10 @@ public class UpgradeService extends Service {
                                     dataList.add(infoData);
 
                                     ReportInfoParameter infoParameter = new ReportInfoParameter();
-                                    infoParameter.setDeviceClientid(SystemInfoManager.readFromNandkey("usid").toUpperCase());
+                                    if(mDeviceId.isEmpty()) {
+                                        mDeviceId =  SystemInfoManager.getDeviceId();
+                                    }
+                                    infoParameter.setDeviceClientid(mDeviceId);
                                     infoParameter.setTimestamp(System.currentTimeMillis());
                                     infoParameter.setToken(token);
                                     infoParameter.setData(dataList);
@@ -817,7 +838,10 @@ public class UpgradeService extends Service {
                                     dataList.add(infoData);
 
                                     ReportInfoParameter infoParameter = new ReportInfoParameter();
-                                    infoParameter.setDeviceClientid(SystemInfoManager.readFromNandkey("usid").toUpperCase());
+                                    if(mDeviceId.isEmpty()) {
+                                        mDeviceId =  SystemInfoManager.getDeviceId();
+                                    }
+                                    infoParameter.setDeviceClientid(mDeviceId);
                                     infoParameter.setTimestamp(System.currentTimeMillis());
                                     infoParameter.setToken(token);
                                     infoParameter.setData(dataList);
@@ -971,7 +995,10 @@ public class UpgradeService extends Service {
     private void getAdList(String token) {
         AdvertModel mIModel = new AdvertModel();
         AdvertParameter parameter = new AdvertParameter();
-        parameter.setDeviceClientid(SystemInfoManager.readFromNandkey("usid").toUpperCase());
+        if(mDeviceId.isEmpty()) {
+            mDeviceId =  SystemInfoManager.getDeviceId();
+        }
+        parameter.setDeviceClientid(mDeviceId);
         parameter.setRequestUuid(CommonUtil.getRandomString(50));
         parameter.setTimestamp(System.currentTimeMillis());
         parameter.setToken(token);
@@ -1378,8 +1405,10 @@ public class UpgradeService extends Service {
         int day = calendar.get(Calendar.DAY_OF_MONTH);
         long timestamp = new Date().getTime();
         String date = CommonUtil.stampToDate(timestamp);
-        String deviceId = SystemInfoManager.readFromNandkey("usid").toUpperCase();
-        String objectKey = OBJECT_KEY_DIR + Integer.toString(year) + "/" + Integer.toString(month) + "/" + Integer.toString(day) + "/CrashLog_" + deviceId + "_" + date + ".zip";
+        if(mDeviceId.isEmpty()) {
+            mDeviceId =  SystemInfoManager.getDeviceId();
+        }
+        String objectKey = OBJECT_KEY_DIR + Integer.toString(year) + "/" + Integer.toString(month) + "/" + Integer.toString(day) + "/CrashLog_" + mDeviceId + "_" + date + ".zip";
         PutObjectRequest put = new PutObjectRequest(BUCKET_NAME, objectKey, zipFilePath);
         try {
             PutObjectResult putObjectResult = oss.putObject(put);

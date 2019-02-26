@@ -203,4 +203,12 @@ public class SystemInfoManager{
 		}
 		return s;
     }
+
+    public static String getDeviceId(){
+        String deviceId =  SystemInfoManager.readFromNandkey("usid");
+        if(deviceId!=null) {
+            deviceId=deviceId.toUpperCase();
+        }else deviceId="";
+        return deviceId;
+    }
 }
