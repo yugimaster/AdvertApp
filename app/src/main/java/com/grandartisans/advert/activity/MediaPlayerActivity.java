@@ -2,76 +2,47 @@ package com.grandartisans.advert.activity;
 
 import java.io.File;
 import java.io.IOException;
-import java.net.SocketException;
-import java.text.MessageFormat;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Date;
 import java.util.List;
-import java.util.TimeZone;
 import java.util.Timer;
 import java.util.TimerTask;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.ReentrantLock;
 
 import android.app.Activity;
 import android.app.AlarmManager;
-import android.app.AlertDialog;
-import android.app.Dialog;
 import android.app.PendingIntent;
 import android.content.ComponentName;
 import android.content.Context;
-import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.ServiceConnection;
-import android.content.res.AssetFileDescriptor;
-import android.graphics.Color;
 import android.hardware.Camera;
-import android.hardware.Sensor;
-import android.hardware.SensorEvent;
-import android.hardware.SensorEventListener;
-import android.hardware.SensorManager;
 import android.media.AudioManager;
 import android.media.MediaPlayer;
-import android.media.MediaPlayer.OnPreparedListener;
-import android.media.MediaRecorder;
 import android.net.Uri;
 import android.os.Bundle;
-import android.os.Environment;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Message;
 import android.os.PowerManager;
-import android.os.SystemClock;
-import android.provider.MediaStore;
+
 import android.util.Log;
-import android.view.Display;
-import android.view.Gravity;
 import android.view.KeyEvent;
 import android.view.SurfaceHolder;
-import android.view.SurfaceView;
 import android.view.View;
-import android.view.ViewGroup.LayoutParams;
-import android.view.Window;
 import android.view.WindowManager;
-import android.widget.ImageView;
-import android.widget.LinearLayout;
-import android.widget.MediaController;
 import android.widget.RelativeLayout;
 import android.widget.TextView;
-import android.widget.VideoView;
-
-import com.github.faucamp.simplertmp.RtmpHandler;
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 import com.grandartisans.advert.app.AdvertApp;
 import com.grandartisans.advert.dbutils.PlayRecord;
 import com.grandartisans.advert.dbutils.dbutils;
+import com.grandartisans.advert.interfaces.ElevatorDoorEventListener;
+import com.grandartisans.advert.interfaces.ElevatorEventListener;
 import com.grandartisans.advert.model.AdvertModel;
-import com.grandartisans.advert.model.entity.DownloadInfo;
 import com.grandartisans.advert.model.entity.PlayingAdvert;
 import com.grandartisans.advert.model.entity.event.AppEvent;
 import com.grandartisans.advert.model.entity.post.EventParameter;
@@ -93,9 +64,8 @@ import com.grandartisans.advert.service.NetworkService;
 import com.grandartisans.advert.service.UpgradeService;
 import com.grandartisans.advert.utils.AdvertVersion;
 import com.grandartisans.advert.utils.CommonUtil;
-import com.grandartisans.advert.utils.FileUtils;
-import com.grandartisans.advert.utils.LogToFile;
-import com.grandartisans.advert.utils.SerialPortUtils;
+import com.grandartisans.advert.utils.ElevatorDoorManager;
+import com.grandartisans.advert.utils.ElevatorStatusManager;
 
 import com.grandartisans.advert.R;
 import com.grandartisans.advert.utils.SystemInfoManager;
@@ -109,16 +79,14 @@ import com.prj.utils.PrjSettingsManager;
 import net.ossrs.yasea.SrsCameraView;
 import net.ossrs.yasea.SrsEncodeHandler;
 import net.ossrs.yasea.SrsPublisher;
-import net.ossrs.yasea.SrsRecordHandler;
 
 import org.greenrobot.eventbus.EventBus;
 import org.greenrobot.eventbus.Subscribe;
 import org.greenrobot.eventbus.ThreadMode;
-import org.json.JSONArray;
 
 import gartisans.hardware.pico.PicoClient;
 
-public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callback,SensorEventListener,SrsEncodeHandler.SrsEncodeListener {
+public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callback,SrsEncodeHandler.SrsEncodeListener {
 	private final String TAG = "MediaPlayerActivity";
 	private MediaPlayer mMediaPlayer;
 	private MySurfaceView surface;
@@ -135,32 +103,16 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 	private List<PlayingAdvert> downloading_ads = new ArrayList<PlayingAdvert>();
 
 	private List<PlayingAdvert> adurls_local = new ArrayList<PlayingAdvert>();
-
-	//List<DateScheduleVo> dateScheduleVos;
-
 	private TerminalAdvertPackageVo mTerminalAdvertPackageVo;
-	/*
-	{"/storage/udisk0/work/videos/58c0d0b04f872.mp4",
-								"/storage/udisk0/work/videos/58c0d1055b43c.mp4",
-								"/storage/udisk0/work/videos/58c0d14d425d5.mp4"};
-	*/
 	private Handler handler;
-	private int distance = 0;
-	private int strength = 0;
 	private int threshold_distance = 0;
-	private int lastdistance = 0;
-	public static final String I2C2_SLAVE_NODE = "/sys/class/i2c2/slave";
 	private PrjSettingsManager prjmanager = null;
-	private static Dialog distanceSetDialog = null;
 	private int screenStatus = 1;
-	private SerialPortUtils serialPortUtils = null;
 
 	private volatile boolean isPowerOff = false;//定时待机状态
 
 	PowerManager mPowerManager;
 	PowerManager.WakeLock mWakeLock;
-
-	private boolean scaleMode = false;
 
 	private final  int threshold_temperature = 58;
 	private  final int temperature_read_times = 200; //连续获取到温度超过指定值次数大于该值，则认为温度过高了
@@ -189,20 +141,6 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 
 	private String mMode ="";
 
-	static final float THRESHOLD = 0.2f; //0.08f;
-	static final int LIFT_STATE_INIT = 0;
-	static final int LIFT_STATE_STOP = 1;
-	static final int LIFT_STATE_UP = 2;
-	static final int LIFT_STATE_DOWN = 3;
-	static final int LIFT_STATE_UP_WAITING_STOP = 4;
-	static final int LIFT_STATE_DOWN_WAITING_STOP = 5;
-	static final int LIFT_STATE_PRE_STOP =6;
-
-
-	static final int DOOR_STATE_INIT  = 0;
-	static final int DOOR_STATE_OPENED  = 1;
-	static final int DOOR_STATE_CLOSED = 2;
-
 	static final int PLAYER_STATE_INIT = 0;
 	static final int PLAYER_STATE_PLAYING = 1;
 	static final int PLAYER_STATE_PAUSED = 2;
@@ -210,8 +148,6 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 	static final int PLAYER_STATE_RELEASED = 4;
 	private int mPlayState = PLAYER_STATE_INIT;
 
-	private SensorManager mSensorManager;
-	private Sensor mAccSensor;
 	public static SrsCameraView mCameraView;
 	public static SrsPublisher mPublisher;
 	private Timer mCheckTimer;
@@ -220,14 +156,10 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 	private ServiceConnection mCamServiceConn;
 	private ServiceConnection mNetServiceConn;
 	private boolean AccSensorEnabled = false;
-	private int mLiftState=0;
-	private int mChanging=0;
-	private int mUpChanging = 0;
-	private int mDownChanging = 0;
 	private float mInitZ = 0;
-	private float mLastZ;
+	private ElevatorStatusManager mElevatorStatusManager;
+	private ElevatorDoorManager mElevatorDoorManager;
 
-	private int mDoorState = DOOR_STATE_INIT;
 
 	private int mReportEventTimeInterval=5*60*1000;
 	private int mIntentId = 0;
@@ -250,7 +182,7 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 					initPlayer();
 					break;
 				case START_OPEN_SERIALPORT:
-					openSerialPort();
+					mElevatorDoorManager.openSerialPort();
 					break;
 				case START_REPORT_EVENT_CMD:
 					ReportPlayRecordAll();
@@ -276,7 +208,7 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 					initService();
 					break;
 				case SET_LIFT_STOP_CMD:
-					setLiftState(LIFT_STATE_STOP);
+					//setLiftState(LIFT_STATE_STOP);
 					setScreenOff();
 					break;
 				case START_FIRST_RECORD_CMD:
@@ -386,8 +318,6 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 		setCurrentTime();
 		keepScreenWake();
 
-
-
 		handler = new Handler();
 		mHandler.sendEmptyMessageDelayed(SET_POWER_ALARM_CMD,1000*60*10);
 		prjmanager = PrjSettingsManager.getInstance(this);
@@ -397,19 +327,13 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 			prjmanager.setMaxBrightness("530,853,683");
 		}
 
-		initAccSensor();
-
+		mElevatorStatusManager = new ElevatorStatusManager(this,mMode,Float.valueOf(prjmanager.getGsensorDefault()));
+		mElevatorStatusManager.registerListener(mElevatorEventListener);
 		initEventBus();//注册事件接收
 
 		initTFMini();//初始化激光测距模块
 
 		initVideoList();
-
-
-		if(mMode.equals("AOSP on p313")) {
-			setDisplay();
-		}
-
 
 		/*
 		Intent intentService = new Intent(MediaPlayerActivity.this,UpgradeService.class);
@@ -424,14 +348,14 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 
 		        if((Float)einfo  > threshold_temperature ) {
 					Log.d(TAG, "read temperature onEvent" + "etype " + etype + " einfo " + (Float)einfo +  "is to high" + "read count = " + temperature_read_count);
-					LogToFile.i(TAG,"read temperature onEvent" + "etype " + etype + " einfo " + (Float)einfo +  "is to high "+"read count = " + temperature_read_count );
+					//LogToFile.i(TAG,"read temperature onEvent" + "etype " + etype + " einfo " + (Float)einfo +  "is to high "+"read count = " + temperature_read_count );
 					temperature_read_count ++ ;
 				}else {
 					temperature_read_count = 0;
 				}
 
 				if(temperature_read_count > temperature_read_times) {
-					LogToFile.i(TAG, "temperature is too high , device will power off ");
+					//LogToFile.i(TAG, "temperature is too high , device will power off ");
 				}
 
 		    }
@@ -521,22 +445,6 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 			e.printStackTrace();
 		}
 	}
-	private void startPlayDefault(){
-		/*
-		AssetFileDescriptor file = getResources().openRawResourceFd(R.raw.defaultvideo);
-		try {
-			mMediaPlayer.reset();
-			mMediaPlayer.setDataSource(file.getFileDescriptor(), file.getStartOffset(),
-					file.getLength());
-			//mMediaPlayer.prepare();
-			mMediaPlayer.prepareAsync();
-			//mMediaPlayer.start();
-			file.close();
-		} catch (IOException e) {
-			e.printStackTrace();
-		}
-		*/
-	}
 
 	private void initPlayer(){
         initFirstPlayer();
@@ -544,9 +452,6 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 		mMediaPlayer.reset();
         if(url!=null && url.length()>0) {
             startPlay(url);
-        }else {
-            startPlayDefault();
-
         }
     }
 	private void onVideoPlayCompleted() {
@@ -559,14 +464,11 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
                 mMediaPlayer.reset();
 				mPlayState = PLAYER_STATE_STOPED;
             }
-			//mMediaPlayer.stop();
 			playindex++;
 			String url = getValidUrl();
 			Log.i(TAG,"onVideoPlayCompleted validurl  =  " + url);
 			if (url != null && url.length() > 0) {
 				startPlay(url);
-			} else {
-				startPlayDefault();
 			}
 		}else{
 			setScreenOff();
@@ -596,13 +498,16 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 					mMode.equals("GAPADS4A1") || mMode.equals("GAPADS4A2") || mMode.equals("GAPEDS4A3")) {
 				mHandler.sendEmptyMessageDelayed(START_OPEN_SERIALPORT, 5 * 1000);
 			}else{
-				openSerialPort();
+				if(mElevatorDoorManager!=null)
+					mElevatorDoorManager.openSerialPort();
+
 			}
 			activate_started =true;
 		}
 		else{
 			mHandler.sendEmptyMessage(START_PLAYER_CMD);
-			openSerialPort();
+			if(mElevatorDoorManager!=null)
+				mElevatorDoorManager.openSerialPort();
 		}
 		Log.i(TAG,"surfaceCreated");
 	}
@@ -642,10 +547,7 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 				mMode.equals("GAPADS4A1") || mMode.equals("GAPADS4A2") || mMode.equals("GAPEDS4A3")) {
 			mHandler.removeMessages(START_OPEN_SERIALPORT);
 		}
-
-		if (serialPortUtils != null) {
-			serialPortUtils.closeSerialPort();
-		}
+		mElevatorDoorManager.closeSeriaPort();
 		if(mMediaPlayer!=null) {
 			Log.i(TAG,"Stop mMediaPlayer");
 			mMediaPlayer.stop();
@@ -661,11 +563,6 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 			CameraService.cameraNeedStop = true;
 			stopRecord();
 		}
-		/*
-		if(AccSensorEnabled) {
-			mSensorManager.unregisterListener(this);
-		}
-		*/
 		setScreen(1);
 	}
 	@Override
@@ -674,19 +571,15 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 		Log.i(TAG,"onResume");
 		initView();
 	}
-	private void openSerialPort(){
-		if (serialPortUtils != null) {
-			if (serialPortUtils.openSerialPort("/dev/" + CommonUtil.getTFMiniDevice()) == null){
 
-			}
-		}
-	}
 	private void onResumeEvent(){
         if(!mMode.equals("AOSP on p313")) {
             threshold_distance = Integer.valueOf(prjmanager.getDistance());
+			mElevatorDoorManager.setDefaultDistance(threshold_distance);
         }
 		if(AccSensorEnabled) {
 			mInitZ = Float.valueOf(prjmanager.getGsensorDefault());
+			mElevatorStatusManager.setAccSensorDefaultValue(mInitZ);
 		}
 
 		if(mMode.equals("GAPADS4A1") || mMode.equals("GAPEDS4A3")||mMode.equals("GAPEDS4A6")){
@@ -701,179 +594,14 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 	public boolean onKeyDown(int keyCode, KeyEvent event) {
 		// TODO Auto-generated method stub
 		Log.i(TAG,"onKeyDown keyCode = " + keyCode);
-		if(keyCode == KeyEvent.KEYCODE_DPAD_LEFT) {
-			if(mMode.equals("AOSP on p313")) {
-				if (isScaleMode()) {
-					scaleDisplay(1);
-				} else {
-					scaleDisplay(5);
-				}
-			}
-		}
-		if(keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) {
-			if(mMode.equals("AOSP on p313")) {
-				if (isScaleMode()) {
-					scaleDisplay(0);
-				} else {
-					scaleDisplay(6);
-				}
-			}
-		}if(keyCode == KeyEvent.KEYCODE_DPAD_DOWN) {
-			if(mMode.equals("AOSP on p313")) {
-				scaleDisplay(2);
-			}
-        }else if(keyCode == KeyEvent.KEYCODE_DPAD_UP){
-			if(mMode.equals("AOSP on p313")) {
-				scaleDisplay(3);
-			}
-        }else if(keyCode == KeyEvent.KEYCODE_DPAD_CENTER ) {
-			if(mMode.equals("AOSP on p313")) {
-				if (isScaleMode()) {
-					setScaleMode(false);
-				} else {
-					showSetDistanceDialog(MediaPlayerActivity.this);
-				}
-			}
-        }else if(keyCode == KeyEvent.KEYCODE_MENU) {
+		if(keyCode == KeyEvent.KEYCODE_MENU) {
 			menuKeyPressedCount +=1;
 			startSysSetting(MediaPlayerActivity.this);
 		}else if(keyCode == KeyEvent.KEYCODE_BACK || keyCode == KeyEvent.KEYCODE_BACKSLASH){
 			return true;
-		}else if(keyCode == 138) { //对焦键按下，对屏幕缩放
-			if(mMode.equals("AOSP on p313")) {
-				if (isScaleMode() == true) {
-					setScaleMode(false);
-					surface.setBackground(null);
-					mMediaPlayer.start();
-					if (IsCameraServiceOn && mCameraService != null && !mCameraService.getFinishStatus() && !mCameraService.getRecordStatus()) {
-						RingLog.d(TAG, "Player is resumed, now resume record");
-						mPublisher.resumeRecord();
-					}
-				} else {
-					setScaleMode(true);
-					mMediaPlayer.pause();
-					surface.setBackgroundColor(Color.BLUE);
-				}
-			}
 		}
 		return super.onKeyDown(keyCode, event);
 	}
-
-	private void setScaleMode(boolean enable){
-		scaleMode = enable;
-	}
-	private boolean isScaleMode(){
-		return scaleMode;
-	}
-
-	private void scaleDisplay(int direction){
-		Display display = getWindowManager().getDefaultDisplay(); // 为获取屏幕宽、高
-		Window window = getWindow();
-
-
-		Log.i(TAG,"display width = " + display.getWidth() + "display height = " + display.getHeight());
-
-		WindowManager.LayoutParams windowLayoutParams = window.getAttributes(); // 获取对话框当前的参数值
-		//windowLayoutParams.width = (int) (display.getWidth() * 0.7); // 宽度设置为屏幕的0.95
-		//windowLayoutParams.height = (int) (display.getHeight() * 0.1); // 高度设置为屏幕的0.6
-
-		int width = windowLayoutParams.width;
-		int height = windowLayoutParams.height;
-		if(width <=0 ) width = display.getWidth();
-		if(height <=0) height = display.getHeight();
-		//if(height <=0) height = (display.getWidth()*4)/10;
-
-		if(direction == 1) { /*缩小显示比例*/
-			int min_width = display.getWidth()/2;
-			int min_height = (display.getWidth()*4/11)/2;
-
-			//int min_width = 1800/2;
-			//int min_height = 720/2;
-
-			//int min_height = display.getHeight()/2;
-			windowLayoutParams.x = 0;
-			windowLayoutParams.y = 0;
-			windowLayoutParams.width = (int) (width * 0.99); // 宽度设置为屏幕的0.95
-			//windowLayoutParams.height = (int) (height * 0.99); // 高度设置为屏幕的0.6
-			windowLayoutParams.height = (int) ((windowLayoutParams.width * 4)/11);
-			if(windowLayoutParams.width < min_width) windowLayoutParams.width = min_width;
-			if(windowLayoutParams.height < min_height) windowLayoutParams.height = min_height;
-		}else if(direction ==0) {/*放大显示比例*/
-			int max_width = display.getWidth();
-			int max_height = (display.getWidth()*4)/11;
-
-			//int max_height = display.getHeight();
-			windowLayoutParams.x = 0;
-			windowLayoutParams.y = 0;
-			windowLayoutParams.width = (int) (width * 1.01); // 宽度设置为屏幕的0.95
-			//windowLayoutParams.height = (int) (height * 1.01); // 高度设置为屏幕的0.6
-			windowLayoutParams.height = (int) ((windowLayoutParams.width * 4)/11); // 高度设置为屏幕的0.6
-			if(windowLayoutParams.width > max_width) windowLayoutParams.width = max_width;
-			if(windowLayoutParams.height > max_height) windowLayoutParams.height = max_height;
-		}else if(direction ==2) { /*垂直向上移动*/
-			windowLayoutParams.y = windowLayoutParams.y+2;
-		}else if(direction == 3) {/*垂直向下移动*/
-			windowLayoutParams.y = windowLayoutParams.y-2;
-		}else if(direction == 5) {/*水平向左移动*/
-			windowLayoutParams.x = windowLayoutParams.x-2;
-		}else if(direction == 6) {/*水平向右移动*/
-			windowLayoutParams.x = windowLayoutParams.x+2;
-		}
-		Log.i(TAG,"widow width = " + windowLayoutParams.width + "widow height = " + windowLayoutParams.height + "x :" + windowLayoutParams.x + "y :" + windowLayoutParams.y);
-		window.setAttributes(windowLayoutParams);
-
-		//surface.setLayoutParams(new LinearLayout.LayoutParams(windowLayoutParams.width, windowLayoutParams.height));
-
-		//surface.getHolder().setFixedSize((int)windowLayoutParams.width,windowLayoutParams.height);
-		surface.setMeasure(windowLayoutParams.width,windowLayoutParams.height);
-		surface.requestLayout();
-
-
-        DevRing.cacheManager().spCache("screenScale").put("width",windowLayoutParams.width);
-        DevRing.cacheManager().spCache("screenScale").put("height",windowLayoutParams.height);
-        DevRing.cacheManager().spCache("screenScale").put("x",windowLayoutParams.x);
-        DevRing.cacheManager().spCache("screenScale").put("y",windowLayoutParams.y);
-	}
-
-	private void setDisplay() {
-        int width = DevRing.cacheManager().spCache("screenScale").getInt("width",0);
-        int height = DevRing.cacheManager().spCache("screenScale").getInt("height",0);
-        int x = DevRing.cacheManager().spCache("screenScale").getInt("x",0);
-        int y = DevRing.cacheManager().spCache("screenScale").getInt("y",0);
-		Window window = getWindow();
-		WindowManager.LayoutParams windowLayoutParams = window.getAttributes(); // 获取对话框当前的参数值
-
-        if(width!=0 && height !=0) {
-            windowLayoutParams.x = x;
-            windowLayoutParams.y = y;
-            windowLayoutParams.width = width;
-            windowLayoutParams.height = height;
-
-        }
-        else {
-			Display display = getWindowManager().getDefaultDisplay(); // 为获取屏幕宽、高
-			width = display.getWidth();
-			height = (display.getWidth()*4)/11;
-			//height = display.getHeight();
-			windowLayoutParams.x = 0;
-			windowLayoutParams.y = 0;
-			windowLayoutParams.width = width;
-			windowLayoutParams.height = height;
-		}
-		Log.i(TAG,"set display width = " + windowLayoutParams.width + " height = " + windowLayoutParams.height + "x=" + windowLayoutParams.x + "y=" + windowLayoutParams.y);
-		window.setAttributes(windowLayoutParams);
-
-
-
-		//surface.setLayoutParams(new LinearLayout.LayoutParams(windowLayoutParams.width, windowLayoutParams.height));
-
-		//surface.getHolder().setFixedSize((int)windowLayoutParams.width,windowLayoutParams.height);
-		surface.setMeasure(windowLayoutParams.width,windowLayoutParams.height);
-		surface.requestLayout();
-
-        //DevRing.cacheManager().diskCache("advertList").put("playList",adurls.toArray());
-    }
-
 
 	private void initEventBus() {
 		EventBus.getDefault().register(this);
@@ -890,7 +618,7 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 			mMediaPlayer.release();
 		}
 		EventBus.getDefault().unregister(this);
-		if(serialPortUtils!=null) serialPortUtils.closeSerialPort();
+		mElevatorDoorManager.closeSeriaPort();
 		if (IsNetworkServiceOn) {
 			unbindService(mNetServiceConn);
 			IsNetworkServiceOn = false;
@@ -904,207 +632,20 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 	}
 
 	private void initTFMini() {
-		initserialPort();
 		if(mMode.equals("AOSP on p313")) {
 			threshold_distance = DevRing.cacheManager().spCache("TFMini").getInt("threshold_distance",0);
 		}else {
 			threshold_distance = Integer.valueOf(prjmanager.getDistance());
 		}
-
-		/*
-		if(threshold_distance == 0 ) {
-			showSetDistanceDialog(MediaPlayerActivity.this);
-		}
-		*/
+		mElevatorDoorManager = new ElevatorDoorManager(threshold_distance);
+		mElevatorDoorManager.registerListener(mElevatorDoorEventListener);
 	}
-
-	private void initAccSensor(){
-
-        LogToFile.init(this);
-
-		mSensorManager = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
-		mAccSensor = mSensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
-		if(mMode.equals("GAPEDS4A2")||mMode.equals("GAPEDS4A4") || mMode.equals("GAPEDS4A6")||
-				mMode.equals("GAPADS4A1") || mMode.equals("GAPADS4A2") || mMode.equals("GAPEDS4A3")){
-			AccSensorEnabled = true;
-			mInitZ =  Float.valueOf(prjmanager.getGsensorDefault());
-		}
-		else AccSensorEnabled = false;
-		Log.i(TAG, "initAccSensor AccSensorEnabled = " + AccSensorEnabled  + " mInitZ = " + mInitZ);
-
-		if(AccSensorEnabled) {
-			mSensorManager.registerListener(this, mAccSensor, 200000);
-			mInitZ = Float.valueOf(prjmanager.getGsensorDefault());
-		}
-	}
-
 	private void startSysSetting(Context context) {
 		Intent intent = new Intent(Intent.ACTION_MAIN);
 		intent.addCategory(Intent.CATEGORY_LAUNCHER);
 		ComponentName cn = new ComponentName("com.projector.settings", "com.txbox.settings.launcher.systemsettings.SystemSettingsMain");
 		intent.setComponent(cn);
 		context.startActivity(intent);
-	}
-
-	private void showSetDistanceDialog(Context context) {
-		if((distanceSetDialog==null||!distanceSetDialog.isShowing())){
-			View view = View.inflate(getApplicationContext(), R.layout.dialog_layout, null);
-			distanceSetDialog = new AlertDialog.Builder(context).setTitle(context.getResources().getString(R.string.bt_distance_title_string)).
-						setView(view).setPositiveButton
-						(context.getResources().getString(R.string.bt_cancel_string),new DialogInterface.OnClickListener() {
-									@Override
-									public void onClick(DialogInterface arg0, int arg1) {
-										// TODO Auto-generated method stub
-										distanceSetDialog.dismiss();
-										//distanceSetDialog = null;
-									}
-								}
-						).setNegativeButton(context.getResources().
-						getString(R.string.bt_setting_string), new DialogInterface.OnClickListener() {
-
-					@Override
-					public void onClick(DialogInterface arg0, int arg1) {
-						// TODO Auto-generated method stub
-						threshold_distance = distance;
-						DevRing.cacheManager().spCache("TFMini").put("threshold_distance",threshold_distance);
-					}
-				}).create();
-			distanceSetDialog.getWindow().setType(WindowManager.LayoutParams.TYPE_SYSTEM_ALERT);
-			distanceSetDialog.show();
-			messageTV  = (TextView) distanceSetDialog.findViewById(R.id.distance_dialog);
-			String message = String.format(getResources().getString(R.string.distmessage), strength, distance);
-			if(messageTV!=null ) messageTV.setText(message);
-		}
-	}
-
-	private void initserialPort()
-	{
-		serialPortUtils = new SerialPortUtils();
-		//串口数据监听事件
-		serialPortUtils.setOnDataReceiveListener(new SerialPortUtils.OnDataReceiveListener() {
-			@Override
-			public void onDataReceive(byte[] buffer, int size) {
-				//Log.i(TAG, "进入数据监听事件中。。。" + new String(buffer));
-				if(CommonUtil.getTFMiniEnabled()==0) return;
-				dealWithData(buffer,size);
-				if(serialPortUtils.serialPortStatus) {
-					//handler.post(ReadThread);
-					if (lastdistance != distance) {
-						handler.post(runnable);
-						lastdistance = distance;
-					}
-
-					if (mLiftState != LIFT_STATE_STOP && mLiftState != LIFT_STATE_PRE_STOP && mLiftState != LIFT_STATE_INIT) {
-						handler.post(runnable);
-					}
-				}
-			}
-
-            Runnable runnable = new Runnable() {
-                @Override
-                public void run() {
-                    if(!isPowerOff && serialPortUtils.serialPortStatus) {
-						//Log.i(TAG, "threshold_distance= " + threshold_distance + "distance = " + distance );
-                        if (distanceSetDialog != null && distanceSetDialog.isShowing()) {
-                            String message = String.format(getResources().getString(R.string.distmessage), strength, distance);
-                            if(messageTV!=null ) messageTV.setText(message);
-                        } else {
-                            if (threshold_distance > 0 && (distance - threshold_distance > 10)) {
-                        		//if(mDoorState!=DOOR_STATE_OPENED) mDoorState = DOOR_STATE_OPENED;
-                                if (screenStatus == 1 || screenStatus ==2) {
-									mHandler.removeMessages(SET_SCREEN_ON_CMD);
-									setScreenOff();
-                                }
-                                if(mLiftState!=LIFT_STATE_INIT) {
-									setLiftState(LIFT_STATE_INIT);
-								}
-                            } else {
-                            	if( screenStatus == 0 && mLiftState==LIFT_STATE_INIT) {
-								//if ((mLiftState == LIFT_STATE_INIT ||mLiftState== LIFT_STATE_UP ||mLiftState==LIFT_STATE_DOWN) && screenStatus == 0) {
-                            		screenStatus = 2;
-                            		Log.i(TAG, "threshold_distance= " + threshold_distance + "distance = " + distance + "setscreen on");
-                            		//LogToFile.i(TAG,"threshold_distance= " + threshold_distance + "distance = " + distance + "setscreen on");
-
-									if(CommonUtil.getGsensorEnabled()!=0) {
-										mHandler.sendEmptyMessageDelayed(SET_SCREEN_ON_CMD, 1000);
-										mHandler.removeMessages(SET_LIFT_STOP_CMD);
-										mHandler.sendEmptyMessageDelayed(SET_LIFT_STOP_CMD, 1000 * 60*2);
-									}else{
-										mHandler.sendEmptyMessageDelayed(SET_SCREEN_ON_CMD, 1000);
-									}
-                            	}else if(screenStatus == 0 && (mLiftState== LIFT_STATE_UP ||mLiftState==LIFT_STATE_DOWN)){
-										mHandler.removeMessages(SET_LIFT_STOP_CMD);
-										mHandler.sendEmptyMessage(SET_SCREEN_ON_CMD);
-                            	}else if(screenStatus == 1 && (mLiftState== LIFT_STATE_UP ||mLiftState==LIFT_STATE_DOWN)){
-										mHandler.removeMessages(SET_LIFT_STOP_CMD);
-								}
-
-                            }
-                        }
-                    }
-                }
-            };
-
-
-		});
-
-	}
-
-
-	private void dealWithData(byte[] buffer, int size)
-	{
-		if(size!=9) {
-			Log.i(TAG,"receiv data error ,size= "+ size + " is not 9 bytes");
-			distance = 0;
-			return ;
-		}
-		if(buffer[0] != 0x59 || buffer[1] !=0x59) {
-			Log.i(TAG,"receiv data error ,head data0 = "+ buffer[0] +"data1 = "+buffer[1]);
-			distance = 0;
-			return ;
-		}
-		int low = buffer[2]&0xff;
-		int high = buffer[3]&0xff;
-		distance = low + high*256;
-		low = buffer[4]&0xff;
-		high = buffer[5]&0xff;
-		strength = low + high*256;
-		/*
-		Log.i(TAG,"strength = " + strength + "dist is " + distance);
-		for(int i=0;i<size;i++) {
-			Log.i(TAG,""+ (buffer[i]&0xff));
-		}
-		*/
-	}
-
-	private void screenScale(int direction){
-		/*
-		LayoutParams lp = videoView.getLayoutParams();
-		int height;
-		int width;
-		if(lp.height>0 && lp.width >0){
-			height = lp.height;
-			width  = lp.width;
-		}else {
-			height = videoView.getHeight();
-			width = videoView.getWidth();
-		}
-		Log.i("TEST","playing video size height = " + height + "width = " + width);
-		if(direction  == 1) {
-			width = (int) (width * 0.9);
-			//height = (int) (height * 0.9);
-		}else if(direction == 0){
-			width = (int) (width * 1.1);
-			//height = (int) (height * 1.1);
-		}else if(direction == 2) {
-		    height = (int) (height * 0.9);
-        }else if(direction == 3) {
-		    height = (int) (height * 1.1);
-        }
-		//videoView.setVideoScale(width, height);
-		DevRing.cacheManager().spCache("screenScale").put("width",width);
-		DevRing.cacheManager().spCache("screenScale").put("height",height);
-		*/
 	}
 	private void initVideoList() {
         String jsondata = DevRing.cacheManager().diskCache("advertList").getString("playList");
@@ -1472,28 +1013,8 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 				initView();
 				initPlayer();
 			}
-			/*
-			if(mMediaPlayer==null || !mMediaPlayer.isPlaying()){
-				Log.i(TAG,"Player is error ,reset player");
-				mediaplayerDestroyedCount +=1;
-				initView();
-				initPlayer();
-			}
-			*/
 		}
 	}
-
-
-	private void  test()
-	{
-		for(int i=0;i<=255;i++) {
-			byte value = (byte)i;
-			String teststring = String.format("0x1a 7 0 0xe0 0x%x 0x00 0x01 0x33 0x01 0x00", value);
-			Log.i(TAG, teststring);
-			Log.i(TAG,"i = " + value);
-		}
-	}
-
 	private void initPowerOffAlarm(int hour,int minute,int second) {
 		Date date = new Date();
 		Calendar cal = Calendar.getInstance();
@@ -1684,133 +1205,67 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 				ResetPowerOnAlarm(powerOnOffData.getStartTime());
 			default:
 				break;
-
 		}
-
     }
 
-	/* Filter positive direction*/
-	@Override
-	public void onSensorChanged(SensorEvent sensorEvent) {
-		Sensor eSensor= sensorEvent.sensor;
-
-		if (eSensor.getType() == Sensor.TYPE_ACCELEROMETER) {
-			//float acc = sensorEvent.values[0];
-			//float acc = sensorEvent.values[1];
-			float acc = sensorEvent.values[2];
-			//Log.i(TAG, "time:" + sensorEvent.timestamp + "acc_z:" + acc  + "  " +"mLiftState=" + mLiftState);
-			// " X Y Z: " + acc_x + " " + acc_y + " " + acc_z);
-			//Log.i(TAG,"state: " + mLiftState  + "acc_z = " + acc);
-            //LogToFile.i(TAG,"state: " + mLiftState  + "acc_z = " + acc);
-			if(CommonUtil.getGsensorEnabled()==0){
-				setLiftState(LIFT_STATE_INIT);
-				return;
-			}
-			switch (mLiftState) {
-				case LIFT_STATE_INIT:
-					//setLiftState(LIFT_STATE_STOP);
-					//mInitZ = acc;
-					//break;
-
-				case LIFT_STATE_STOP: {
-					float deltaz = acc - mInitZ;
-					if (Math.abs(deltaz) > THRESHOLD && deltaz >0) {
-						mDownChanging = 0;
-						if (++mUpChanging == 8) {
-							mUpChanging = 0;
-							setLiftState(LIFT_STATE_UP);
-						}
-					}else if(Math.abs(deltaz) > THRESHOLD && deltaz <0){
-						mUpChanging = 0;
-						if (++mDownChanging == 8) {
-							mDownChanging = 0;
-							setLiftState(LIFT_STATE_DOWN);
-						}
-					} else {
-						if (mChanging != 0) mChanging = 0;
-						mDownChanging = 0;
-						mUpChanging = 0;
-					}
-					break;
-				}
-
-				case LIFT_STATE_DOWN: {
-					//check decelerate
-					float deltaz = acc - mInitZ;
-					if (deltaz > THRESHOLD) {
-						if (++mChanging == 8) {
-							mChanging = 0;
-							setLiftState(LIFT_STATE_PRE_STOP);
-						}
-					} else {
-						if (mChanging != 0) mChanging = 0;
-					}
-					break;
-				}
-
-				case LIFT_STATE_PRE_STOP: {
-					float deltaz = acc - mInitZ;
-					if (Math.abs(deltaz) <= 0.08) {
-						if (++mChanging == 4) {
-							mChanging = 0;
-							setLiftState(LIFT_STATE_STOP);
-						}
-					} else {
-						if (mChanging != 0) mChanging = 0;
-					}
-					break;
-				}
-				case LIFT_STATE_UP_WAITING_STOP: {
-					float deltaz = acc - mInitZ;
-					if (acc > mLastZ ) {
-						if (++mChanging == 4) {
-							mChanging = 0;
-							setLiftState(LIFT_STATE_PRE_STOP);
-						}
-					} else {
-						if (mChanging != 0) mChanging = 0;
-					}
-					break;
-				}
-
-				case LIFT_STATE_DOWN_WAITING_STOP: {
-					float deltaz = acc - mInitZ;
-					if (acc < mLastZ) {
-						if (++mChanging == 4) {
-							mChanging = 0;
-							setLiftState(LIFT_STATE_PRE_STOP);
-						}
-					} else {
-						if (mChanging != 0) mChanging = 0;
-					}
-					break;
-				}
-				case LIFT_STATE_UP: {
-					//check decelerate
-					float deltaz = acc - mInitZ;
-					if (deltaz < 0) {
-						if (Math.abs(deltaz) > THRESHOLD) {
-							if (++mChanging == 8) {
-								mChanging = 0;
-								setLiftState(LIFT_STATE_PRE_STOP);
-							}
-						} else {
-							if (mChanging != 0) mChanging = 0;
-						}
-					}
-					break;
+	ElevatorEventListener mElevatorEventListener =new  ElevatorEventListener(){
+		@Override
+		public void onElevatorUp(){
+			Log.i(TAG, "onElevatorUp:"  + "screenStatus = " + screenStatus);
+			if(!mElevatorDoorManager.isDoorOpened()) {
+				if (screenStatus == 0) {
+					mHandler.removeMessages(SET_LIFT_STOP_CMD);
+					mHandler.sendEmptyMessage(SET_SCREEN_ON_CMD);
+				} else if (screenStatus == 1) {
+					mHandler.removeMessages(SET_LIFT_STOP_CMD);
 				}
 			}
-
-			mLastZ = acc;
 		}
-	}
-
-	@Override
-	public void onAccuracyChanged(Sensor sensor, int i) {
-
-	}
-
+		@Override
+		public void onElevatorDown(){
+			Log.i(TAG, "onElevatorDown:"  + "screenStatus = " + screenStatus);
+			if(!mElevatorDoorManager.isDoorOpened()) {
+				if (screenStatus == 0) {
+					mHandler.removeMessages(SET_LIFT_STOP_CMD);
+					mHandler.sendEmptyMessage(SET_SCREEN_ON_CMD);
+				} else if (screenStatus == 1) {
+					mHandler.removeMessages(SET_LIFT_STOP_CMD);
+				}
+			}
+		}
+		@Override
+		public void onElevatorStop(){
+			Log.i(TAG, "onElevatorStop:"  + "screenStatus = " + screenStatus);
+			if(CommonUtil.isForeground(MediaPlayerActivity.this,"com.grandartisans.advert.activity.MediaPlayerActivity")) {
+				setScreenOff();
+			}
+		}
+	};
+	ElevatorDoorEventListener mElevatorDoorEventListener = new ElevatorDoorEventListener(){
+		@Override
+		public void onElevatorDoorOpen(){
+			Log.i(TAG, "onElevatorDoorOpen:"  + "screenStatus = " + screenStatus);
+			if (screenStatus == 1 || screenStatus ==2) {
+				mHandler.removeMessages(SET_SCREEN_ON_CMD);
+				setScreenOff();
+			}
+			mElevatorStatusManager.setStatusDefault();
+		}
+		@Override
+		public void onElevatorDoorClose(){
+			Log.i(TAG, "onElevatorDoorClose:"  + "screenStatus = " + screenStatus);
+			if( screenStatus == 0 ) {
+				screenStatus = 2;
+				if(CommonUtil.getGsensorEnabled()!=0) {
+					mHandler.sendEmptyMessageDelayed(SET_SCREEN_ON_CMD, 1000);
+					mHandler.removeMessages(SET_LIFT_STOP_CMD);
+					mHandler.sendEmptyMessageDelayed(SET_LIFT_STOP_CMD, 1000 * 60*2);
+				}else{
+					mHandler.sendEmptyMessageDelayed(SET_SCREEN_ON_CMD, 1000);
+				}
+			}
+		}
+	};
 	@Override
 	public void onEncodeIllegalArgumentException(IllegalArgumentException e) {
 		handleException(e);
@@ -1832,36 +1287,6 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 	@Override
 	public void onNetworkResume() {}
 
-	private void setLiftState(int liftState) {
-		mLiftState = liftState;
-		Log.i(TAG, "state: " + liftState);
-        //LogToFile.i(TAG,"state: " + liftState);
-		//mLiftStateTV.setText(liftStateString(mLiftState));
-		switch (liftState) {
-			case LIFT_STATE_INIT:
-				break;
-			case LIFT_STATE_STOP:
-			    if(CommonUtil.isForeground(MediaPlayerActivity.this,"com.grandartisans.advert.activity.MediaPlayerActivity")) {
-                    setScreenOff();
-                }
-				break;
-			case LIFT_STATE_UP:
-				//setScreenOn();
-				break;
-			case LIFT_STATE_DOWN:
-				//setScreenOn();
-				break;
-			//case LIFT_STATE_DOWN_WAITING_STOP:
-			//case LIFT_STATE_UP_WAITING_STOP:
-			case LIFT_STATE_PRE_STOP:
-                if(CommonUtil.isForeground(MediaPlayerActivity.this,"com.grandartisans.advert.activity.MediaPlayerActivity")) {
-                    setScreenOff();
-                }
-				break;
-			default:
-				break;
-		}
-	}
 	private void checkCamera() {
 		// 初始化CameraView 并设置为不可见
 		startCheckCameraTimer();
