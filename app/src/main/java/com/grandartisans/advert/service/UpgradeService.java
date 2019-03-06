@@ -1211,13 +1211,15 @@ public class UpgradeService extends Service {
         if (fileCheck.exists() && fileCheck.length() >0 ) {
             if(EncryptUtil.md5sum(filePath).equals(fileMd5))
             {
-                Message msg = new Message();
-                msg.what = DOWNLOAD_COMPLITE_CMD;
-                msg.obj = fileMd5;
-                mHandler.sendMessage(msg);
-                EventBus.getDefault().post(new AppEvent(AppEvent.ADVERT_DOWNLOAD_FINISHED_EVENT, filePath));
-                updatePlayListFilePath(FileUtil.getExternalCacheDir(getApplicationContext()) + "/" + fileMd5 + ".mp4");
-                return;
+                if(type ==1 ) {
+                    Message msg = new Message();
+                    msg.what = DOWNLOAD_COMPLITE_CMD;
+                    msg.obj = fileMd5;
+                    mHandler.sendMessage(msg);
+                    EventBus.getDefault().post(new AppEvent(AppEvent.ADVERT_DOWNLOAD_FINISHED_EVENT, filePath));
+                    updatePlayListFilePath(FileUtil.getExternalCacheDir(getApplicationContext()) + "/" + fileMd5 + ".mp4");
+                    return;
+                }
             }else {
                 fileCheck.delete();
             }
