@@ -970,7 +970,7 @@ public class UpgradeService extends Service {
                     }
                 }
             }
-            downloadAdList();
+            if(downloadList.size()>0) downloadAdList();
     }
 
     private void updatePlayListFilePath(String path){
