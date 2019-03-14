@@ -49,11 +49,11 @@ public class ElevatorStatusManager implements SensorEventListener {
             AccSensorEnabled = true;
         }
         else AccSensorEnabled = false;
+        mInitZ = defaultValue;
         Log.i(TAG, "initAccSensor AccSensorEnabled = " + AccSensorEnabled  + " mInitZ = " + mInitZ);
 
         if(AccSensorEnabled) {
             mSensorManager.registerListener(this, mAccSensor, 200000);
-            mInitZ = defaultValue;
         }
     }
     public int getStatus(){
@@ -81,7 +81,7 @@ public class ElevatorStatusManager implements SensorEventListener {
             float acc = sensorEvent.values[2];
             //Log.i(TAG, "time:" + sensorEvent.timestamp + "acc_z:" + acc  + "  " +"mLiftState=" + mLiftState);
             // " X Y Z: " + acc_x + " " + acc_y + " " + acc_z);
-            //Log.i(TAG,"state: " + mLiftState  + "acc_z = " + acc);
+            //Log.i(TAG,"mInitZ = " + mInitZ + "state: " + mLiftState  + "acc_z = " + acc);
             //LogToFile.i(TAG,"state: " + mLiftState  + "acc_z = " + acc);
             if(CommonUtil.getGsensorEnabled()==0){
                 setLiftState(LIFT_STATE_INIT);

@@ -139,6 +139,8 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 	private final int SET_LIFT_STOP_CMD = 100021;
 	private final int START_FIRST_RECORD_CMD = 100022;
 
+    private final int START_CAMERACHECK_CMD = 100023;
+
 	private String mMode ="";
 
 	static final int PLAYER_STATE_INIT = 0;
@@ -150,12 +152,10 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 
 	public static SrsCameraView mCameraView;
 	public static SrsPublisher mPublisher;
-	private Timer mCheckTimer;
 	private CameraService mCameraService;
 	private NetworkService mNetworkService;
 	private ServiceConnection mCamServiceConn;
 	private ServiceConnection mNetServiceConn;
-	private boolean AccSensorEnabled = false;
 	private float mInitZ = 0;
 	private ElevatorStatusManager mElevatorStatusManager;
 	private ElevatorDoorManager mElevatorDoorManager;
@@ -214,6 +214,9 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 				case START_FIRST_RECORD_CMD:
 					startFirstRecord();
 					break;
+                case START_CAMERACHECK_CMD:
+                    checkCamera();
+                    break;
 				default:
 					break;
 			}
@@ -577,10 +580,8 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
             threshold_distance = Integer.valueOf(prjmanager.getDistance());
 			mElevatorDoorManager.setDefaultDistance(threshold_distance);
         }
-		if(AccSensorEnabled) {
-			mInitZ = Float.valueOf(prjmanager.getGsensorDefault());
-			mElevatorStatusManager.setAccSensorDefaultValue(mInitZ);
-		}
+        mInitZ = Float.valueOf(prjmanager.getGsensorDefault());
+        mElevatorStatusManager.setAccSensorDefaultValue(mInitZ);
 
 		if(mMode.equals("GAPADS4A1") || mMode.equals("GAPEDS4A3")||mMode.equals("GAPEDS4A6")){
 			if (IsCameraServiceOn && mPublisher != null) {
@@ -1144,6 +1145,21 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 	}
 	/*设置当前时间*/
 	private void setCurrentTime(){
+		if(System.currentTimeMillis()<0){
+			Calendar c = Calendar.getInstance();
+			c.set(Calendar.YEAR,1970);
+			c.set(Calendar.MONTH,1);
+			c.set(Calendar.DAY_OF_MONTH,1 );
+			c.set(Calendar.HOUR_OF_DAY, 1);
+			c.set(Calendar.MINUTE, 0);
+			c.set(Calendar.SECOND, 0);
+			c.set(Calendar.MILLISECOND, 0);
+			long when = c.getTimeInMillis();
+			if(when / 1000 < Integer.MAX_VALUE) {
+				((AlarmManager) getSystemService(Context.ALARM_SERVICE)).setTime(when);
+			}
+		}
+		/*
 		if(CommonUtil.compareDateState("2015-01-01 00:00:00","2016-01-01 23:59:00")){
 			long when = DevRing.cacheManager().spCache("SysTime").getLong("timeInMillis",0);
 			if(when!=0){
@@ -1153,6 +1169,7 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 					}
 			}
 		}
+		*/
 	}
 	/*保存当前时间*/
 	private void saveCurrentTime(){
@@ -1289,26 +1306,17 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 
 	private void checkCamera() {
 		// 初始化CameraView 并设置为不可见
-		startCheckCameraTimer();
-	}
-
-	private void startCheckCameraTimer() {
-		mCheckTimer = new Timer();
-		mCheckTimer.schedule(new TimerTask() {
-			@Override
-			public void run() {
-				int num = Camera.getNumberOfCameras();
-				RingLog.d(TAG, "Camera numbers is " + num);
-				if (num != 0) {
-                    RingLog.d(TAG, "Camera is on");
-                    mCheckTimer.cancel();
-                    firstStartRecord = true;
-                    mHandler.sendEmptyMessageDelayed(START_SERVICE_CMD, 1000);
-                } else {
-                    RingLog.d(TAG, "None camera");
-                }
-			}
-		}, 6000, 5 * 1000);
+        int num = Camera.getNumberOfCameras();
+        RingLog.d(TAG, "Camera numbers is " + num);
+        if (num != 0) {
+            RingLog.d(TAG, "Camera is on");
+            firstStartRecord = true;
+            mHandler.sendEmptyMessageDelayed(START_SERVICE_CMD, 3000);
+        } else {
+            RingLog.d(TAG, "None camera");
+            mHandler.removeMessages(START_CAMERACHECK_CMD);
+            mHandler.sendEmptyMessageDelayed(START_CAMERACHECK_CMD,10*1000);
+        }
 	}
 
 	private void initCameraView() {
