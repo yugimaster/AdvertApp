@@ -44,6 +44,7 @@ import com.grandartisans.advert.model.entity.post.EventParameter;
 import com.grandartisans.advert.model.entity.post.HeartBeatParameter;
 import com.grandartisans.advert.model.entity.post.ReportEventData;
 import com.grandartisans.advert.model.entity.post.ReportInfoParameter;
+import com.grandartisans.advert.model.entity.post.ReportSchedueVerParameter;
 import com.grandartisans.advert.model.entity.post.TokenParameter;
 import com.grandartisans.advert.model.entity.post.UserAgent;
 import com.grandartisans.advert.model.entity.res.AdListHttpResult;
@@ -65,6 +66,7 @@ import com.grandartisans.advert.model.entity.res.TimeSchedule;
 import com.grandartisans.advert.model.entity.res.TimeScheduleVo;
 import com.grandartisans.advert.model.entity.res.TokenHttpResult;
 import com.grandartisans.advert.model.entity.res.UpgradeHttpResult;
+import com.grandartisans.advert.utils.AdPlayListManager;
 import com.grandartisans.advert.utils.AdvertVersion;
 import com.grandartisans.advert.utils.CommonUtil;
 import com.grandartisans.advert.utils.EncryptUtil;
@@ -108,6 +110,7 @@ public class UpgradeService extends Service {
     private final int GETTOKEN_CMD = 10005;
     private final int UPGRADE_APP_ON_USB_CMD = 10006;
     private final int SHOW_TIME_INFO_CMD = 10007;
+    private final int START_REPORT_SCHEDULEVER_CMD = 10008;
 
     private final int HEART_BEAT_INTERVAL_TIME = 60*1000;// 心跳检测发送时间
 
@@ -149,6 +152,8 @@ public class UpgradeService extends Service {
 
     private List<PlayingAdvert> adurls = new ArrayList<PlayingAdvert>();
     private String mDeviceId = "";
+
+    private AdPlayListManager mPlayListManager = null;
 
     Runnable runableUsbUpgrade = new Runnable() {
         @Override
@@ -528,6 +533,11 @@ public class UpgradeService extends Service {
                     break;
                 case SHOW_TIME_INFO_CMD:
                     showTimeInfo();
+                case START_REPORT_SCHEDULEVER_CMD:
+                    if(adurls.size()>0) {
+                        ReportScheduleVer(adurls.get(0).getTemplateid(),mAdverPosition.getId(), mAdverPosition.getVersion());
+                    }
+                    break;
                 default:
                     break;
             }
@@ -548,6 +558,8 @@ public class UpgradeService extends Service {
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
+
+        mPlayListManager = AdPlayListManager.getInstance(getApplicationContext());
         initUSB(getApplicationContext());
         uploadLog(getApplicationContext());
         appUpgrade(getApplicationContext());
@@ -921,7 +933,6 @@ public class UpgradeService extends Service {
             TemplateRegion region = regionList.get(0);
             Long advertPositionId = result.getData().getRelationMap().get(region.getIdent());
             AdvertPositionVo advertPositionVo = result.getData().getAdvertPositionMap().get(advertPositionId);
-            EventBus.getDefault().post(new AppEvent(AppEvent.ADVERT_LIST_UPDATE_EVENT, result.getData()));
             if(advertPositionVo!=null) {
                 List<DateScheduleVo> dateScheduleVos = advertPositionVo.getDateScheduleVos();
                 mAdverPosition = advertPositionVo.getadvertPosition();
@@ -983,14 +994,7 @@ public class UpgradeService extends Service {
         }
     }
 
-    private void saveAdvertVersion(AdvertPosition advertPosition) {
-        Gson gson = new Gson();
-        String str = gson.toJson(adurls);
-        Log.i(TAG, "save advertlist = " + str);
-        DevRing.cacheManager().diskCache("advertList").put("playList", str);
 
-        AdvertVersion.setAdVersion(advertPosition.getId().intValue(), advertPosition.getVersion());
-    }
 
     private void getAdList(String token) {
         AdvertModel mIModel = new AdvertModel();
@@ -1019,6 +1023,42 @@ public class UpgradeService extends Service {
             }
 
         },null);
+    }
+
+    private void ReportScheduleVer(long templateid,long positionid,int adversion)
+    {
+        EventParameter parameter = new EventParameter();
+        parameter.setSn(SystemInfoManager.readFromNandkey("usid").toUpperCase());
+        parameter.setSessionid(CommonUtil.getRandomString(50));
+        parameter.setTimestamp(System.currentTimeMillis());
+        parameter.setToken(mToken);
+        parameter.setApp(Utils.getAppPackageName(getApplicationContext()));
+        parameter.setEvent("scheduleVer");
+        parameter.setEventtype(4000);
+
+        parameter.setMac(CommonUtil.getEthernetMac());
+        ReportSchedueVerParameter info = new ReportSchedueVerParameter();
+        info.setTemplateid(templateid);
+        info.setAdPositionID(positionid);
+        info.setVersion(adversion);
+
+        parameter.setEventData(info);
+        parameter.setTimestamp(System.currentTimeMillis());
+        AdvertModel mIModel = new AdvertModel();
+
+        DevRing.httpManager().commonRequest(mIModel.reportEvent(parameter), new CommonObserver<ReportInfoResult>() {
+            @Override
+            public void onResult(ReportInfoResult result) {
+                RingLog.d("reportScheduleVersion  ok status = " + result.getStatus());
+            }
+
+            @Override
+            public void onError(int i, String s) {
+                RingLog.d("reportScheduleVersion error i = " + i + "msg = " + s);
+                handler.removeMessages(START_REPORT_SCHEDULEVER_CMD);
+                handler.sendEmptyMessageDelayed(START_REPORT_SCHEDULEVER_CMD, 30 * 1000);
+            }
+        }, null);
     }
 
     private void downloadAdList() {
@@ -1055,8 +1095,11 @@ public class UpgradeService extends Service {
             }
         }
         if(finished) {
-            EventBus.getDefault().post(new AppEvent(AppEvent.ADVERT_LIST_DOWNLOAD_FINISHED_EVENT,mAdverPosition));
-            saveAdvertVersion(mAdverPosition);
+            mPlayListManager.updatePlayList(adurls);
+            mPlayListManager.saveAdvertVersion(mAdverPosition);
+            if(adurls.size()>0) {
+                ReportScheduleVer(adurls.get(0).getTemplateid(),mAdverPosition.getId(), mAdverPosition.getVersion());
+            }
         }
     }
 
@@ -1120,7 +1163,6 @@ public class UpgradeService extends Service {
                 msg.what = DOWNLOAD_COMPLITE_CMD;
                 msg.obj = fileMd5;
                 mHandler.sendMessage(msg);
-                EventBus.getDefault().post(new AppEvent(AppEvent.ADVERT_DOWNLOAD_FINISHED_EVENT, FileUtil.getExternalCacheDir(getApplicationContext()) + "/" + fileMd5 + ".mp4"));
                 return;
             }else {
                 fileCheck.deleteOnExit();
@@ -1146,7 +1188,6 @@ public class UpgradeService extends Service {
                                 msg.what = DOWNLOAD_COMPLITE_CMD;
                                 msg.obj = fileMd5;
                                 mHandler.sendMessage(msg);
-                                EventBus.getDefault().post(new AppEvent(AppEvent.ADVERT_DOWNLOAD_FINISHED_EVENT,filePath));
                                 Log.d(TAG,"Download File finished filePath :" + filePath );
                             }
                         }
@@ -1216,7 +1257,6 @@ public class UpgradeService extends Service {
                     msg.what = DOWNLOAD_COMPLITE_CMD;
                     msg.obj = fileMd5;
                     mHandler.sendMessage(msg);
-                    EventBus.getDefault().post(new AppEvent(AppEvent.ADVERT_DOWNLOAD_FINISHED_EVENT, filePath));
                     updatePlayListFilePath(FileUtil.getExternalCacheDir(getApplicationContext()) + "/" + fileMd5 + ".mp4");
                     return;
                 }
@@ -1273,7 +1313,6 @@ public class UpgradeService extends Service {
                         msg.what = DOWNLOAD_COMPLITE_CMD;
                         msg.obj = fileMd5;
                         mHandler.sendMessage(msg);
-                        EventBus.getDefault().post(new AppEvent(AppEvent.ADVERT_DOWNLOAD_FINISHED_EVENT, filePath));
                         updatePlayListFilePath(filePath);
                         Log.d(TAG, "Download File finished filePath :" + filePath);
                     }else if(type == 0) { /*apk 下载*/

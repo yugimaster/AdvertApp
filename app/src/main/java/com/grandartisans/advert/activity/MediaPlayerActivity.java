@@ -1,14 +1,11 @@
 package com.grandartisans.advert.activity;
 
-import java.io.File;
 import java.io.IOException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Date;
 import java.util.List;
-import java.util.Timer;
-import java.util.TimerTask;
 import java.util.concurrent.locks.ReentrantLock;
 
 import android.app.Activity;
@@ -35,9 +32,6 @@ import android.view.View;
 import android.view.WindowManager;
 import android.widget.RelativeLayout;
 import android.widget.TextView;
-import com.google.gson.Gson;
-import com.google.gson.reflect.TypeToken;
-import com.grandartisans.advert.app.AdvertApp;
 import com.grandartisans.advert.dbutils.PlayRecord;
 import com.grandartisans.advert.dbutils.dbutils;
 import com.grandartisans.advert.interfaces.ElevatorDoorEventListener;
@@ -48,21 +42,13 @@ import com.grandartisans.advert.model.entity.event.AppEvent;
 import com.grandartisans.advert.model.entity.post.EventParameter;
 import com.grandartisans.advert.model.entity.post.PlayerStatusParameter;
 import com.grandartisans.advert.model.entity.post.ReportEventData;
-import com.grandartisans.advert.model.entity.post.ReportSchedueVerParameter;
-import com.grandartisans.advert.model.entity.res.AdvertFile;
-import com.grandartisans.advert.model.entity.res.AdvertPosition;
-import com.grandartisans.advert.model.entity.res.AdvertPositionVo;
-import com.grandartisans.advert.model.entity.res.AdvertVo;
-import com.grandartisans.advert.model.entity.res.DateScheduleVo;
 import com.grandartisans.advert.model.entity.res.PowerOnOffData;
 import com.grandartisans.advert.model.entity.res.ReportInfoResult;
-import com.grandartisans.advert.model.entity.res.TemplateRegion;
 import com.grandartisans.advert.model.entity.res.TerminalAdvertPackageVo;
-import com.grandartisans.advert.model.entity.res.TimeScheduleVo;
 import com.grandartisans.advert.service.CameraService;
 import com.grandartisans.advert.service.NetworkService;
 import com.grandartisans.advert.service.UpgradeService;
-import com.grandartisans.advert.utils.AdvertVersion;
+import com.grandartisans.advert.utils.AdPlayListManager;
 import com.grandartisans.advert.utils.CommonUtil;
 import com.grandartisans.advert.utils.ElevatorDoorManager;
 import com.grandartisans.advert.utils.ElevatorStatusManager;
@@ -97,13 +83,8 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 	private int mediaplayerDestroyedCount = 0;
 	private int menuKeyPressedCount = 0;
 
-	private TextView messageTV ;
 	private int playindex = 0;
-	private List<PlayingAdvert> adurls = new ArrayList<PlayingAdvert>();
-	private List<PlayingAdvert> downloading_ads = new ArrayList<PlayingAdvert>();
 
-	private List<PlayingAdvert> adurls_local = new ArrayList<PlayingAdvert>();
-	private TerminalAdvertPackageVo mTerminalAdvertPackageVo;
 	private Handler handler;
 	private int threshold_distance = 0;
 	private PrjSettingsManager prjmanager = null;
@@ -125,7 +106,6 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 	private final int SET_SCREEN_ON_CMD = 100010;
 	private final int START_PLAYER_CMD = 100011;
 	private final int START_REPORT_EVENT_CMD= 100012;
-	private final int START_REPORT_SCHEDULEVER_CMD = 100013;
 	private final int ON_PAUSE_EVENT_CMD = 100014;
 	private final int SET_POWER_ALARM_CMD = 100015;
 	private final int START_OPEN_SERIALPORT = 100016;
@@ -169,6 +149,9 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 	private boolean IsNetworkServiceOn = false;
 	public static boolean firstStartRecord = false;
 
+
+	AdPlayListManager mPlayListManager = null;
+
 	private Handler mHandler = new Handler()
 	{
 		public void handleMessage(Message paramMessage)
@@ -186,9 +169,6 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 					break;
 				case START_REPORT_EVENT_CMD:
 					ReportPlayRecordAll();
-					break;
-				case START_REPORT_SCHEDULEVER_CMD:
-					ReportScheduleVer();
 					break;
 				case ON_PAUSE_EVENT_CMD:
 					onPauseEvent();
@@ -309,9 +289,6 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 			//initPowerOnAlarm(13,10,00);
 		}
 	};
-
-
-
 	@Override
 	protected void onCreate(Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
@@ -320,6 +297,8 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 		Log.i(TAG,"onCreate");
 		setCurrentTime();
 		keepScreenWake();
+
+		mPlayListManager = AdPlayListManager.getInstance(getApplicationContext());
 
 		handler = new Handler();
 		mHandler.sendEmptyMessageDelayed(SET_POWER_ALARM_CMD,1000*60*10);
@@ -336,7 +315,7 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 
 		initTFMini();//初始化激光测距模块
 
-		initVideoList();
+		mPlayListManager.init();
 
 		/*
 		Intent intentService = new Intent(MediaPlayerActivity.this,UpgradeService.class);
@@ -451,7 +430,7 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 
 	private void initPlayer(){
         initFirstPlayer();
-        String url = getValidUrl();
+        String url = mPlayListManager.getValidPlayUrl(playindex);
 		mMediaPlayer.reset();
         if(url!=null && url.length()>0) {
             startPlay(url);
@@ -468,7 +447,7 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 				mPlayState = PLAYER_STATE_STOPED;
             }
 			playindex++;
-			String url = getValidUrl();
+			String url = mPlayListManager.getValidPlayUrl(playindex);
 			Log.i(TAG,"onVideoPlayCompleted validurl  =  " + url);
 			if (url != null && url.length() > 0) {
 				startPlay(url);
@@ -648,30 +627,9 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 		intent.setComponent(cn);
 		context.startActivity(intent);
 	}
-	private void initVideoList() {
-        String jsondata = DevRing.cacheManager().diskCache("advertList").getString("playList");
-        Gson gson = new Gson();
-        if (jsondata!=null) {
-            adurls = gson.fromJson(jsondata, new TypeToken<List<PlayingAdvert>>() {}.getType());
-        }
-        File path = new File("/system/media/advertList");
-        if(path.exists()) {
-        	File[] files = path.listFiles();// 读取文件夹下文件
-			for (int i = 0; i < files.length; i++) {
-				PlayingAdvert item = new PlayingAdvert();
-				Log.i(TAG,"interal file = " + files[i].getAbsolutePath());
-				item.setPath(files[i].getAbsolutePath());
-				//item.setPath("http://update.thewaxseal.cn/videos/defaultvideo.mp4");
-				adurls_local.add(item);
-			}
-        }
-
-	}
-
 	private void savePlayRecord() {
-		if(adurls.size()>0) {
-			int index = playindex % adurls.size();
-			PlayingAdvert item = adurls.get(index);
+		PlayingAdvert item = mPlayListManager.getPlayingAd(playindex);
+		if(item!=null) {
 			PlayRecord record = new PlayRecord();
 			record.setTpid(item.getTemplateid());
 			record.setApid(item.getAdPositionID());
@@ -755,47 +713,6 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 		mHandler.sendEmptyMessageDelayed(START_REPORT_PLAYSTATUS_CMD,mReportEventTimeInterval);
 	}
 
-	private void ReportScheduleVer()
-	{
-		EventParameter parameter = new EventParameter();
-		parameter.setSn(SystemInfoManager.readFromNandkey("usid").toUpperCase());
-		parameter.setSessionid(CommonUtil.getRandomString(50));
-		parameter.setTimestamp(System.currentTimeMillis());
-		parameter.setToken(UpgradeService.mToken);
-		parameter.setApp(Utils.getAppPackageName(MediaPlayerActivity.this));
-		parameter.setEvent("scheduleVer");
-		parameter.setEventtype(4000);
-
-		parameter.setMac(CommonUtil.getEthernetMac());
-
-		if(adurls.size()>0) {
-			int index = playindex % adurls.size();
-			PlayingAdvert item = adurls.get(index);
-			ReportSchedueVerParameter info = new ReportSchedueVerParameter();
-			info.setTemplateid(item.getTemplateid());
-			info.setAdPositionID(item.getAdPositionID());
-			info.setVersion(AdvertVersion.getAdVersion(item.getAdPositionID()));
-
-			parameter.setEventData(info);
-			parameter.setTimestamp(System.currentTimeMillis());
-			AdvertModel mIModel = new AdvertModel();
-
-			DevRing.httpManager().commonRequest(mIModel.reportEvent(parameter), new CommonObserver<ReportInfoResult>() {
-				@Override
-				public void onResult(ReportInfoResult result) {
-					RingLog.d("reportScheduleVersion  ok status = " + result.getStatus());
-				}
-
-				@Override
-				public void onError(int i, String s) {
-					RingLog.d("reportScheduleVersion error i = " + i + "msg = " + s);
-					handler.removeMessages(START_REPORT_SCHEDULEVER_CMD);
-					handler.sendEmptyMessageDelayed(START_REPORT_SCHEDULEVER_CMD,30*1000);
-				}
-			}, null);
-		}
-	}
-
 	private void ReportPlayRecord(final PlayRecord record)
 	{
 		EventParameter parameter = new EventParameter();
@@ -833,147 +750,6 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 				RingLog.d("reportEvent error i = " + i + "msg = " + s );
 			}
 		},null);
-	}
-
-	private String  getValidUrl() {
-		String url=null;
-		lock.lock();
-		Log.i(TAG,"adurls size  = " + adurls.size() + "playindex = " + playindex);
-		Log.i(TAG,"adurls_local size  = " + adurls_local.size() + "playindex = " + playindex);
-		boolean urlvalid = false;
-		if(adurls.size()>0) {
-			url = findPlayUrl();
-			if(url!=null && !url.isEmpty()) {
-				urlvalid = true;
-				int index = playindex % adurls.size();
-				//url = adurls.get(index).getPath();
-				AdvertApp.setPlayingAdvert(adurls.get(index));
-
-				PlayRecord record = new PlayRecord();
-			}else{
-				urlvalid = false;
-			}
-
-		}
-		if(urlvalid == false && adurls_local.size()>0) {
-			int index = playindex % adurls_local.size();
-			url = adurls_local.get(index).getPath();
-			PlayingAdvert playingItem = new PlayingAdvert();
-			Long id = Long.valueOf(0);
-			playingItem.setAdPositionID(id);
-			playingItem.setAdvertid(id);
-			AdvertApp.setPlayingAdvert(playingItem);
-		}
-		lock.unlock();
-		return url;
-	}
-	private String findPlayUrl(){
-		String url="";
-		int size = adurls.size();
-		for(int i=0;i<size;i++) {
-			int index = playindex % adurls.size();
-
-			PlayingAdvert playAdvertItem  = adurls.get(index);
-			Log.i(TAG,"play advertitem "+ playAdvertItem.getPath() + "playindex = " +  playindex + "index = " + index + "path = " + playAdvertItem.getPath());
-			Log.i(TAG,"play advertitem   = " +  playAdvertItem.getStartDate() + " " + playAdvertItem.getStartTime()+playAdvertItem.getEndDate() + " " + playAdvertItem.getEndTime());
-			if(playAdvertItem.getPath()!=null && !playAdvertItem.getPath().isEmpty()) {
-				if(playAdvertItem.getStartDate()!=null && !playAdvertItem.getStartDate().isEmpty()) {
-					if (CommonUtil.compareDateState(playAdvertItem.getStartDate() + " " + playAdvertItem.getStartTime(), playAdvertItem.getEndDate() + " " + playAdvertItem.getEndTime())) {
-						url = playAdvertItem.getPath();
-						break;
-					} else if (CommonUtil.compareDateState("2015-01-01 00:00:00", "2016-12-30 23:59:59")) {
-						url = playAdvertItem.getPath();
-						break;
-					} else {
-						playindex++;
-					}
-				}else{
-					url = playAdvertItem.getPath();
-					break;
-				}
-			}else{
-				playindex++;
-			}
-		}
-		return url;
-	}
-
-	private void updatePlayListFilePath(String path){
-		int size = downloading_ads.size();
-		for(int i=0;i<size;i++){
-			PlayingAdvert item = downloading_ads.get(i);
-			if(path.contains(item.getMd5())){
-				item.setPath(path);
-			}
-		}
-	}
-
-	private void updateVideoList() {
-		//playindex=0;
-		downloading_ads.clear();
-		if(mTerminalAdvertPackageVo!=null ) {
-			List<DateScheduleVo> dateScheduleVos=null;
-			List<TemplateRegion> regionList  = mTerminalAdvertPackageVo.getTemplate().getRegionList();
-			TemplateRegion region = regionList.get(0);
-			Long advertPositionId = mTerminalAdvertPackageVo.getRelationMap().get(region.getIdent());
-			AdvertPositionVo advertPositionVo = mTerminalAdvertPackageVo.getAdvertPositionMap().get(advertPositionId);
-			if(advertPositionVo!=null) {
-				dateScheduleVos = advertPositionVo.getDateScheduleVos();
-				//mAdverPosition = advertPositionVo.getadvertPosition();
-
-			}
-			int dateScheduleSize = dateScheduleVos.size();
-			for(int l=0;l<dateScheduleSize;l++) {
-				DateScheduleVo dateScheduleVo = dateScheduleVos.get(l);
-				List<TimeScheduleVo> timeScheduleVos = dateScheduleVo.getTimeScheduleVos();
-				int timeScheduleSize = timeScheduleVos.size();
-				for (int k = 0; k < timeScheduleSize; k++) {
-					TimeScheduleVo timeScheduleVo = timeScheduleVos.get(k);
-					List<AdvertVo> packageAdverts = timeScheduleVo.getPackageAdverts();
-					Long adPositionId = dateScheduleVo.getDateSchedule().getAdvertPositionId();
-					int size = packageAdverts.size();
-					for (int i = 0; i < size; i++) {
-						AdvertVo advertVo = packageAdverts.get(i);
-						List<AdvertFile> fileList = advertVo.getFileList();
-						for (int j = 0; j < fileList.size(); j++) {
-							AdvertFile advertFile = fileList.get(j);
-								PlayingAdvert item = new PlayingAdvert();
-								item.setPath("");
-								item.setMd5(advertFile.getFileMd5());
-								item.setAdvertid(advertFile.getAdvertid());
-								item.setAdPositionID(adPositionId);
-								item.setTemplateid(region.getTemplateid());
-								item.setStartDate(dateScheduleVo.getDateSchedule().getStartDate());
-								item.setEndDate(dateScheduleVo.getDateSchedule().getEndDate());
-								item.setStartTime(timeScheduleVo.getTimeSchedule().getStartTime()+":00");
-								item.setEndTime(timeScheduleVo.getTimeSchedule().getEndTime()+":00");
-								downloading_ads.add(item);
-						}
-					}
-				}
-			}
-        }
-	}
-
-	private void saveAdvertVersion(AdvertPosition advertPosition){
-		adurls.clear();
-		playindex = 0;
-		for(int i=0;i<downloading_ads.size();i++){
-			adurls.add(downloading_ads.get(i));
-		}
-
-
-		Gson gson = new Gson();
-		String str = gson.toJson(adurls);
-		Log.i(TAG, "save advertlist = " + str);
-		DevRing.cacheManager().diskCache("advertList").put("playList", str);
-
-		AdvertVersion.setAdVersion(advertPosition.getId().intValue(),advertPosition.getVersion());
-		ReportSchedueVerParameter info = new ReportSchedueVerParameter();
-		info.setAdPositionID(advertPosition.getId());
-		info.setVersion(advertPosition.getVersion());
-		info.setTemplateid(mTerminalAdvertPackageVo.getTemplate().getTemplate().getId());
-		ReportScheduleVer();
 	}
 
 	private int getScreenStatus(){
@@ -1093,8 +869,6 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 		cal.set(Calendar.MINUTE, minute);
 		cal.set(Calendar.MILLISECOND, 00);
 
-
-
 		Intent intent1=new Intent("POWER_ON_ALARM");
 		PendingIntent pi1= PendingIntent.getBroadcast(this, 0, intent1,0);
 		//设置一个PendingIntent对象，发送广播
@@ -1184,19 +958,10 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 		switch (msg) {
 			case AppEvent.ADVERT_DOWNLOAD_FINISHED_EVENT:
 				Log.i(TAG,"received event data = " + event.getData());
-				//updateVideoList((String)event.getData());
-				updatePlayListFilePath((String)event.getData());
 				break;
 			case AppEvent.ADVERT_LIST_UPDATE_EVENT:
-				//Log.i(TAG,"received event data = " + event.getData());
-				mTerminalAdvertPackageVo = (TerminalAdvertPackageVo) event.getData();
-				//adurls.clear();
-				//playindex = 0;
-				updateVideoList();
-				//Log.i(TAG,"received event data size =  " + dateScheduleVos.size());
 				break;
 			case AppEvent.ADVERT_LIST_DOWNLOAD_FINISHED_EVENT:
-				saveAdvertVersion((AdvertPosition) event.getData());
 				break;
 			case AppEvent.POWER_SET_ALARM_EVENT:
 				if ("POWER_OFF_ALARM".equals(event.getData())) {
