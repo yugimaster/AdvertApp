@@ -65,5 +65,6 @@ dependencies {
     //用于替换fresco的网络加载为okhttp
     implementation files('libs/prjManager.jar')
     implementation files('libs/nanohttpd-2.2.0.jar')
+    implementation files('libs/MobileIMSDKServerX_META.jar')
     provided files('libs/pico.jar')
 }

@@ -9,6 +9,7 @@ import com.aspsine.multithreaddownload.util.FileUtils;
 import com.grandartisans.advert.app.constant.UrlConstants;
 import com.grandartisans.advert.dbutils.dbutils;
 import com.grandartisans.advert.model.entity.PlayingAdvert;
+import com.grandartisans.advert.sdk.IMClientManager;
 import com.ljy.devring.DevRing;
 import com.ljy.devring.util.FileUtil;
 
@@ -32,7 +33,7 @@ public class AdvertApp extends Application {
         super.onCreate();
         sContext = getApplicationContext();
 
-
+        IMClientManager.getInstance(sContext).initMobileIMSDK();
 
 
 

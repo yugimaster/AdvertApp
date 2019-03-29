@@ -46,6 +46,7 @@ import com.grandartisans.advert.model.entity.res.PowerOnOffData;
 import com.grandartisans.advert.model.entity.res.ReportInfoResult;
 import com.grandartisans.advert.model.entity.res.TerminalAdvertPackageVo;
 import com.grandartisans.advert.service.CameraService;
+import com.grandartisans.advert.service.LoginNettyService;
 import com.grandartisans.advert.service.NetworkService;
 import com.grandartisans.advert.service.UpgradeService;
 import com.grandartisans.advert.utils.AdPlayListManager;
@@ -321,6 +322,8 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 		Intent intentService = new Intent(MediaPlayerActivity.this,UpgradeService.class);
 		startService(intentService);
 		*/
+		Intent intentService = new Intent(MediaPlayerActivity.this, LoginNettyService.class);
+		startService(intentService);
 
 
 		PicoClient.OnEventListener mPicoOnEventListener = new PicoClient.OnEventListener() {
@@ -667,7 +670,13 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 
 	private void ReportPlayStatus () {
 		EventParameter parameter = new EventParameter();
-		parameter.setSn(SystemInfoManager.readFromNandkey("usid").toUpperCase());
+		String deviceId = SystemInfoManager.readFromNandkey("usid");
+		if (deviceId != null) {
+			deviceId.toUpperCase();
+		} else {
+			deviceId = "TEST1234567890";
+		}
+		parameter.setSn(deviceId);
 		parameter.setSessionid(CommonUtil.getRandomString(50));
 		parameter.setTimestamp(System.currentTimeMillis());
 		parameter.setToken(UpgradeService.mToken);
@@ -716,7 +725,13 @@ public class MediaPlayerActivity extends Activity implements SurfaceHolder.Callb
 	private void ReportPlayRecord(final PlayRecord record)
 	{
 		EventParameter parameter = new EventParameter();
-		parameter.setSn(SystemInfoManager.readFromNandkey("usid").toUpperCase());
+		String deviceId = SystemInfoManager.readFromNandkey("usid");
+		if (deviceId != null) {
+			deviceId.toUpperCase();
+		} else {
+			deviceId = "TEST1234567890";
+		}
+		parameter.setSn(deviceId);
 		parameter.setSessionid(CommonUtil.getRandomString(50));
 		parameter.setTimestamp(System.currentTimeMillis());
 		parameter.setToken(UpgradeService.mToken);
