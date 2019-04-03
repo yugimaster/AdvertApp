@@ -5,6 +5,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
+import android.media.AudioManager;
 import android.net.TrafficStats;
 import android.os.Handler;
 import android.os.IBinder;
@@ -31,6 +32,7 @@ import com.grandartisans.advert.app.AdvertApp;
 import com.grandartisans.advert.dbutils.PlayRecord;
 import com.grandartisans.advert.dbutils.dbutils;
 import com.grandartisans.advert.model.AdvertModel;
+import com.grandartisans.advert.model.AudioMngModel;
 import com.grandartisans.advert.model.DownloadModel;
 import com.grandartisans.advert.model.entity.DownloadInfo;
 import com.grandartisans.advert.model.entity.PlayingAdvert;
@@ -84,6 +86,7 @@ import com.ljy.devring.http.support.observer.CommonObserver;
 import com.ljy.devring.http.support.observer.DownloadObserver;
 import com.ljy.devring.other.RingLog;
 import com.ljy.devring.util.FileUtil;
+import com.prj.utils.PrjSettingsManager;
 
 import org.greenrobot.eventbus.EventBus;
 import org.xutils.common.Callback;
@@ -156,6 +159,7 @@ public class UpgradeService extends Service {
     private String mDeviceId = "";
 
     private AdPlayListManager mPlayListManager = null;
+    private PrjSettingsManager prjmanager = null;
 
     Runnable runableUsbUpgrade = new Runnable() {
         @Override
@@ -562,6 +566,7 @@ public class UpgradeService extends Service {
     public int onStartCommand(Intent intent, int flags, int startId) {
 
         mPlayListManager = AdPlayListManager.getInstance(getApplicationContext());
+        prjmanager = PrjSettingsManager.getInstance(this);
         initUSB(getApplicationContext());
         uploadLog(getApplicationContext());
         appUpgrade(getApplicationContext());
@@ -903,11 +908,19 @@ public class UpgradeService extends Service {
                                             VolumeData volumeData = list.get(0);
                                             int volumeValue = volumeData.getVolume();
                                             RingLog.d(TAG, "volumedata volume=" + volumeValue);
-                                            int volume = DevRing.cacheManager().spCache("VolumeData").getInt("volume", 20);
-                                            if (volume != volumeValue) {
-                                                DevRing.cacheManager().spCache("VolumeData").put("volume", volumeValue);
-                                                EventBus.getDefault().post(new AppEvent(AppEvent.SET_VOLUME_EVENT, volumeValue));
-                                            }
+                                            int volume = volumeValue *15/100;
+
+                                            AudioMngModel mAudioMngModel = new AudioMngModel(getApplicationContext());
+                                            mAudioMngModel.setVoiceHundred(volumeValue);
+                                            RingLog.d("EventBus", "set volume value: " + volumeValue);
+                                            /*
+                                            Intent intent = new Intent("tofu.intent.action.VOLUME_CHANGED");
+                                            intent.putExtra("tofu.intent.extra.VOLUME_TYPE", 0);
+                                            intent.putExtra("tofu.intent.extra.VOLUME_VALUE", volume);
+                                            intent.putExtra("tofu.intent.extra.VOLUME_MAX", 15);
+                                            intent.putExtra("tofu.intent.extra.VOLUME_FLAG", 0);
+                                            sendBroadcast(intent);
+                                            */
                                         }
                                     }
                                 }
@@ -917,17 +930,13 @@ public class UpgradeService extends Service {
                                         String eventDataString = dataItem.getEventData().toString();
                                         Gson gson = new Gson();
                                         if (eventDataString != null) {
-                                            list = gson.fromJson(eventDataString, new TypeToken<List<VolumeData>>() {}.getType());
+                                            list = gson.fromJson(eventDataString, new TypeToken<List<BrightnessData>>() {}.getType());
                                         }
                                         if (list != null && list.size() > 0) {
                                             BrightnessData brightnessData = list.get(0);
                                             int brightness = brightnessData.getBrightness();
                                             RingLog.d(TAG, "brightnessdata brightness=" + brightness);
-                                            int brightnessCache = DevRing.cacheManager().spCache("BrightnessData").getInt("brightness", 5);
-                                            if (brightnessCache != brightness) {
-                                                DevRing.cacheManager().spCache("BrightnessData").put("brightness", brightness);
-                                                EventBus.getDefault().post(new AppEvent(AppEvent.SET_BRIGHTNESS_EVENT, brightness));
-                                            }
+                                            prjmanager.setBrightness(brightness);
                                         }
                                     }
                                 }

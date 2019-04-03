@@ -11,7 +11,7 @@ import android.provider.Settings;
  * desc:    亮度控制模块
  */
 
-public class ScreenMngModel {
+public class ScreenManager {
 
     private final String TAG = "ScreenMngModel";
 
@@ -23,7 +23,7 @@ public class ScreenMngModel {
      * 初始化，获取ContentProvider数据
      * @param context
      */
-    public ScreenMngModel(Context context) {
+    public ScreenManager(Context context) {
         mContentResolver = context.getContentResolver();
     }
 

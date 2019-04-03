@@ -3,6 +3,7 @@ package com.grandartisans.advert.model;
 import android.content.Context;
 import android.media.AudioManager;
 import android.support.annotation.IntDef;
+import android.util.Log;
 
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
@@ -18,7 +19,7 @@ public class AudioMngModel {
     private final String TAG = "AudioMngModel";
 
     private AudioManager mAudioManager;
-    private int NOW_AUDIO_TYPE = TYPE_SYSTEM;
+    private int NOW_AUDIO_TYPE = TYPE_MUSIC;
     private int NOW_FLAG = FLAG_NOTHING;
 
     /**
@@ -90,7 +91,9 @@ public class AudioMngModel {
         int a = (int) Math.ceil((num) * getSystemMaxVolume() * 0.01);
         a = a <= 0 ? 0 : a;
         a = a >= 100 ? 100 : a;
-        mAudioManager.setStreamVolume(NOW_AUDIO_TYPE, a, 0);
+
+        Log.d("setVoiceHundred ","volume = " + num + "max volume = " + getSystemMaxVolume());
+        mAudioManager.setStreamVolume(NOW_AUDIO_TYPE, a, 1);
         return getCurrentVolumeHundred();
     }
 }
