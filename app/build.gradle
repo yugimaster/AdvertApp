@@ -6,8 +6,8 @@ android {
         applicationId "com.grandartisans.advert"
         minSdkVersion 21
         targetSdkVersion 27
-        versionCode 30
-        versionName "1.1.19"
+        versionCode 31
+        versionName "1.1.20"
         ndk {
             abiFilters "armeabi-v7a"
         }
