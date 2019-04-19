@@ -12,6 +12,10 @@ public class AppEvent<T> {
     public final static int POWER_UPDATE_ALARM_EVENT = 6;
     public final static int SET_VOLUME_EVENT = 7;
     public final static int SET_BRIGHTNESS_EVENT = 8;
+    public final static int SHOW_ADVERT_INFO = 9;
+    public final static int CLOSE_ADVERT_INFO = 10;
+    public final static int SET_ADVERT_INFO = 11;
+    public final static int UPDATE_ADVERT_WEATHER = 12;
 
 
     public AppEvent(){

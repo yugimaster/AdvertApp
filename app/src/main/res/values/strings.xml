@@ -22,4 +22,6 @@
     <string name="bt_setting_string">设置</string>
     <string name="bt_cancel_string">取消</string>
     <string name="bt_distance_title_string">检测距离设置</string>
+
+    <string name="celsius">\u2103</string>
 </resources>

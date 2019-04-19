@@ -8,6 +8,8 @@ import com.grandartisans.advert.model.entity.post.HeartBeatParameter;
 import com.grandartisans.advert.model.entity.post.ReportInfoParameter;
 import com.grandartisans.advert.model.entity.post.TokenParameter;
 import com.grandartisans.advert.model.entity.res.AdListHttpResult;
+import com.grandartisans.advert.model.entity.res.AdvertInfoResult;
+import com.grandartisans.advert.model.entity.res.AdvertWeatherResult;
 import com.grandartisans.advert.model.entity.res.HeartBeatResult;
 import com.grandartisans.advert.model.entity.res.ReportInfoResult;
 import com.grandartisans.advert.model.entity.res.TokenHttpResult;
@@ -43,4 +45,11 @@ public interface AdvertApiService {
     @POST(UrlConstants.REPORT_EVENT)
     Observable<ReportInfoResult> reportEvent(@Body EventParameter parameter);
 
+    @Headers({"Content-Type: application/json;charset=utf-8","Accept: application/json"})
+    @POST(UrlConstants.GET_ADVERT_INFO)
+    Observable<AdvertInfoResult> getAdvertInfo(@Body AdvertParameter parameter);
+
+    @Headers({"Content-Type: application/json;charset=utf-8","Accept: application/json"})
+    @POST(UrlConstants.GET_ADVERT_WEATHER)
+    Observable<AdvertWeatherResult> getAdvertWeather(@Body AdvertParameter parameter);
 }

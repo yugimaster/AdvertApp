@@ -20,6 +20,8 @@ public interface UrlConstants {
     String GET_APP_UPGRADE = "api/version/app/check";
     String GET_SYSTEM_UPGRADE = "api/version/system/check";
     String GET_ADVERT_LIST = "api/schedule/times";
+    String GET_ADVERT_INFO = "api/system/Info";
+    String GET_ADVERT_WEATHER = "api/system/weather";
     String  SEND_HEARTBEAT = "api/heartbeat/advertV1";
     String REPORT_INFO = "api/heartbeat/info";
     String REPORT_EVENT = "api/event/export";

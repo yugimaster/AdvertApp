@@ -61,6 +61,7 @@ import com.grandartisans.advert.model.entity.res.DateSchedule;
 import com.grandartisans.advert.model.entity.res.DateScheduleVo;
 import com.grandartisans.advert.model.entity.res.HeartBeatData;
 import com.grandartisans.advert.model.entity.res.HeartBeatResult;
+import com.grandartisans.advert.model.entity.res.InfoStatus;
 import com.grandartisans.advert.model.entity.res.PositionVer;
 import com.grandartisans.advert.model.entity.res.PowerOnOffData;
 import com.grandartisans.advert.model.entity.res.ReportInfoResult;
@@ -937,6 +938,25 @@ public class UpgradeService extends Service {
                                             int brightness = brightnessData.getBrightness();
                                             RingLog.d(TAG, "brightnessdata brightness=" + brightness);
                                             prjmanager.setBrightness(brightness);
+                                        }
+                                    }
+                                }
+                                else if (dataItem.getEventID().equals("1011")) {/*广告预设信息*/
+                                    List<InfoStatus> list = new ArrayList<>();
+                                    if (dataItem.getEventData().getClass().equals(list.getClass())) {
+                                        String eventDataString = dataItem.getEventData().toString();
+                                        Gson gson = new Gson();
+                                        if (eventDataString != null) {
+                                            list = gson.fromJson(eventDataString, new TypeToken<List<InfoStatus>>() {}.getType());
+                                        }
+                                        if (list != null && list.size() > 0) {
+                                            InfoStatus infoStatus = list.get(0);
+                                            int status = infoStatus.getStatus();
+                                            if (status == 1) {
+                                                EventBus.getDefault().post(new AppEvent(AppEvent.SHOW_ADVERT_INFO, ""));
+                                            } else if (status == 0) {
+                                                EventBus.getDefault().post(new AppEvent(AppEvent.CLOSE_ADVERT_INFO, ""));
+                                            }
                                         }
                                     }
                                 }

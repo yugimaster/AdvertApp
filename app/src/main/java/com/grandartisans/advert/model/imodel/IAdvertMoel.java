@@ -16,4 +16,6 @@ public interface IAdvertMoel {
     Observable sendHeartBeat(HeartBeatParameter parameter);
     Observable reportInfo(ReportInfoParameter parameter);
     Observable reportEvent(EventParameter parameter);
+    Observable getAdvertInfo(AdvertParameter parameter);
+    Observable getAdvertWeather(AdvertParameter parameter);
 }

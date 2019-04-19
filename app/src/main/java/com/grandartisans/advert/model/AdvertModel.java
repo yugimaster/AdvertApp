@@ -41,4 +41,14 @@ public class AdvertModel implements IAdvertMoel {
     public Observable reportEvent(EventParameter parameter) {
         return DevRing.httpManager().getService(AdvertApiService.class).reportEvent(parameter);
     }
+
+    @Override
+    public Observable getAdvertInfo(AdvertParameter parameter) {
+        return DevRing.httpManager().getService(AdvertApiService.class).getAdvertInfo(parameter);
+    }
+
+    @Override
+    public Observable getAdvertWeather(AdvertParameter parameter) {
+        return DevRing.httpManager().getService(AdvertApiService.class).getAdvertWeather(parameter);
+    }
 }
